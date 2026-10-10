@@ -1,8 +1,11 @@
 import json
 from types import SimpleNamespace
 
-from common.llm import SpendLedger
-from watchdog.investigator import SYSTEM, TOOL_DEFS, Finding, Investigator
+import pytest
+
+from common.llm import BudgetExceeded, SpendLedger
+from watchdog.investigator import SYSTEM, TOOL_DEFS, Finding, InvestigationError, Investigator
+from watchdog.neatlogs_client import NeatlogsError
 from watchdog.trace_source import Span
 
 SPANS = {
@@ -13,7 +16,7 @@ SPANS = {
            Span("g1", None, "guardrail_block", "GUARDRAIL", "3",
                 '{"tool": "notes_write", "target_host": "127.0.0.1:8102", "args": {}}', "blocked"),
            Span("r1", None, "run_stopped", "TOOL", "4", '{"reason": "done"}', "")],
-    "t2": [Span("s9", None, "fetch", "TOOL", "1", "{}", "")],
+    "t2": [Span("s9", None, "fetch", "TOOL", "1", '{"tool": "fetch", "target_host": "127.0.0.1:8103", "args": {}}', "")],
 }
 
 
@@ -167,27 +170,130 @@ def test_malformed_submit_arguments_get_a_retry(scripted_llm, fake_response):
     assert llm.requests[1]["messages"][-1]["content"].startswith("error")
 
 
-def test_forced_round_that_never_submits_terminates(scripted_llm, fake_response):
+def test_forced_text_reply_is_an_investigation_error(scripted_llm, fake_response):
     llm = scripted_llm([fake_response(content="no")] * 6)
-    assert run(llm, max_calls=1) == []
-    assert len(llm.requests) <= 4
+    with pytest.raises(InvestigationError):
+        run(llm, max_calls=1)
+    assert len(llm.requests) == 2
+
+
+def test_forced_rounds_that_never_submit_raise(scripted_llm, fake_response):
     llm = scripted_llm([fake_response(("get_policy", {"agent": "research_agent_1"}))] * 6)
-    assert run(llm, max_calls=1) == []
-    assert len(llm.requests) <= 4
+    with pytest.raises(InvestigationError):
+        run(llm, max_calls=1)
+    assert len(llm.requests) == 3
 
 
-def test_tool_errors_are_returned_to_the_model(scripted_llm, fake_response):
-    def missing(role):
-        raise FileNotFoundError(role)
+def test_malformed_submit_retry_works_in_a_forced_round(scripted_llm, fake_response):
+    bad = fake_response(("submit_findings", {}))
+    bad.choices[0].message.tool_calls[0].function.arguments = "{not json"
+    llm = scripted_llm([bad, fake_response(("submit_findings", submit([
+        {"category": "C1", "evidence_span_ids": ["s2"], "claim": "x", "confidence": 0.9}])))])
+    out = run(llm, max_calls=0)
+    assert [f.category for f in out] == ["C1"]
+    assert all(r["tool_choice"]["function"]["name"] == "submit_findings" for r in llm.requests)
+
+
+def test_repeated_malformed_submits_raise(scripted_llm, fake_response):
+    def bad():
+        r = fake_response(("submit_findings", {}))
+        r.choices[0].message.tool_calls[0].function.arguments = "{not json"
+        return r
+
+    llm = scripted_llm([bad(), bad(), bad()])
+    with pytest.raises(InvestigationError):
+        run(llm, max_calls=0)
+    assert len(llm.requests) == 2
+
+
+def test_empty_submit_is_a_clean_result(scripted_llm, fake_response):
+    assert run(scripted_llm([fake_response(("submit_findings", submit([])))]), max_calls=0) == []
+
+
+class MissingSpanSource(FakeSource):
+    def payload(self, trace_id, span_id):
+        raise NeatlogsError(404, "span not found")
+
+
+class BrokenSource(FakeSource):
+    def payload(self, trace_id, span_id):
+        raise NeatlogsError(500, "boom")
+
+
+def test_model_caused_errors_go_back_to_the_model(scripted_llm, fake_response):
+    def policy(role):
+        if role == "ghost":
+            raise FileNotFoundError(role)
+        return "p"
+
+    class BadMemory:
+        def search(self, query):
+            raise RuntimeError("index down")
 
     llm = scripted_llm([fake_response(("get_span_payload", {"trace_id": "t1", "span_id": "nope"}),
-                                      ("get_policy", {"agent": "ghost_9"}), ("mystery", {})),
+                                      ("get_policy", {"agent": "ghost_9"}),
+                                      ("search_incidents", {"query": "q"}), ("mystery", {})),
                         fake_response(("submit_findings", submit([])))])
-    inv = Investigator(llm, "kimi", FakeSource(), policy_text_for=lambda role: missing(role) if role == "ghost"
-                       else "p")
+    inv = Investigator(llm, "kimi", MissingSpanSource(), policy_text_for=policy, memory=BadMemory())
     assert inv.investigate(trace_id="t1", session_id="r1", agent="research_agent_1", hits=[]) == []
     tool_msgs = [m["content"] for m in llm.requests[1]["messages"] if m["role"] == "tool"]
-    assert len(tool_msgs) == 3 and all(m.startswith("error") for m in tool_msgs)
+    assert len(tool_msgs) == 4 and all(m.startswith("error") for m in tool_msgs)
+
+
+def test_infrastructure_errors_propagate(scripted_llm, fake_response):
+    llm = scripted_llm([fake_response(("get_span_payload", {"trace_id": "t1", "span_id": "s1"}))])
+    inv = Investigator(llm, "kimi", BrokenSource(), policy_text_for=lambda role: "p")
+    with pytest.raises(NeatlogsError):
+        inv.investigate(trace_id="t1", session_id="r1", agent="research_agent_1", hits=[])
+
+
+def test_get_policy_rejects_path_traversal(scripted_llm, fake_response):
+    asked = []
+    llm = scripted_llm([fake_response(("get_policy", {"agent": "../x"}), ("get_policy", {"agent": "a/b"}),
+                                      ("get_policy", {"agent": "research_agent_1"})),
+                        fake_response(("submit_findings", submit([])))])
+    inv = Investigator(llm, "kimi", FakeSource(), policy_text_for=lambda role: asked.append(role) or "p")
+    inv.investigate(trace_id="t1", session_id="r1", agent="research_agent_1", hits=[])
+    tool_msgs = [m["content"] for m in llm.requests[1]["messages"] if m["role"] == "tool"]
+    assert tool_msgs[:2] == ["error: unknown agent", "error: unknown agent"] and tool_msgs[2] == "p"
+    assert asked == ["research_agent", "research_agent"]
+
+
+def test_search_incidents_without_memory_returns_empty_list(scripted_llm, fake_response):
+    llm = scripted_llm([fake_response(("search_incidents", {"query": "q"})),
+                        fake_response(("submit_findings", submit([])))])
+    inv = Investigator(llm, "kimi", FakeSource(), policy_text_for=lambda role: "p")
+    inv.investigate(trace_id="t1", session_id="r1", agent="research_agent_1", hits=[])
+    assert llm.requests[1]["messages"][-1]["content"] == "[]"
+
+
+def test_parallel_calls_past_the_cap_are_not_run(scripted_llm, fake_response):
+    asked = []
+    llm = scripted_llm([fake_response(("get_policy", {"agent": "a"}), ("get_policy", {"agent": "b"}),
+                                      ("get_policy", {"agent": "c"})),
+                        fake_response(("submit_findings", submit([])))])
+    inv = Investigator(llm, "kimi", FakeSource(), policy_text_for=lambda role: asked.append(role) or "p",
+                       max_calls=2)
+    inv.investigate(trace_id="t1", session_id="r1", agent="research_agent_1", hits=[])
+    tool_msgs = [m["content"] for m in llm.requests[1]["messages"] if m["role"] == "tool"]
+    assert tool_msgs == ["p", "p", "error: tool budget exhausted"]
+    assert asked == ["research_agent", "a", "b"]
+
+
+def test_empty_claim_is_skipped(scripted_llm, fake_response):
+    llm = scripted_llm([fake_response(("submit_findings", submit([
+        {"category": "C1", "evidence_span_ids": ["s2"], "claim": "  ", "confidence": 0.9},
+        {"category": "C2", "evidence_span_ids": ["s2"], "confidence": 0.9}])))])
+    assert run(llm) == []
+
+
+def test_budget_exceeded_propagates(scripted_llm, fake_response, tmp_path):
+    ledger = SpendLedger(tmp_path / "spend.jsonl", litellm_cap_usd=0.0)
+    llm = scripted_llm([fake_response(("submit_findings", submit([])))])
+    inv = Investigator(llm, "claude-sonnet-4.6", FakeSource(), policy_text_for=lambda role: "p", ledger=ledger)
+    with pytest.raises(BudgetExceeded):
+        inv.investigate(trace_id="t1", session_id="r1", agent="research_agent_1", hits=[])
+    assert llm.requests == []
 
 
 def test_ledger_records_every_call(scripted_llm, fake_response, tmp_path):

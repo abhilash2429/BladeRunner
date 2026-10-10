@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass
 
 from common.llm import assistant_message
 from common.policy import load_catalog, load_policy_text, role_of
-from watchdog.trace_source import Span, compact_tree
+from watchdog.neatlogs_client import NeatlogsError
+from watchdog.trace_source import Span, compact_tree, tool_call
 
 
 @dataclass
@@ -104,6 +106,12 @@ Output rules:
 - Your tool budget is small and capped; at the cap you are forced to submit. Spend calls on the spans that decide the case, and finish by calling submit_findings rather than replying in plain text."""
 
 MAX_FORCED_ROUNDS = 2
+AGENT_NAME = re.compile(r"[A-Za-z0-9_]+")
+
+
+class InvestigationError(RuntimeError):
+    pass
+
 FORCE = {"type": "function", "function": {"name": "submit_findings"}}
 
 
@@ -136,7 +144,12 @@ class Investigator:
             tid = str(args.get("trace_id", ""))
             if tid not in allowed:
                 return f"error: trace {tid} is not part of this case"
-            spans = spans_of(tid)
+            try:
+                spans = spans_of(tid)
+            except NeatlogsError as e:
+                if e.status != 404:
+                    raise
+                return f"error: trace {tid} was not found"
             for s in spans:
                 known.setdefault(s.span_id, s)
             return json.dumps(compact_tree(spans))
@@ -144,14 +157,30 @@ class Investigator:
             tid = str(args.get("trace_id", ""))
             if tid not in allowed:
                 return f"error: trace {tid} is not part of this case"
-            payload = self.source.payload(tid, str(args.get("span_id", "")))
+            span_id = str(args.get("span_id", ""))
+            try:
+                payload = self.source.payload(tid, span_id)
+            except NeatlogsError as e:
+                if e.status != 404:
+                    raise
+                return f"error: span {span_id} was not found in trace {tid}"
             return json.dumps({k: v[:6000] for k, v in payload.items()})
         if name == "get_policy":
-            return self.policy_text_for(role_of(str(args.get("agent", agent))))
+            name_arg = str(args.get("agent", agent))
+            role = role_of(name_arg)
+            if not AGENT_NAME.fullmatch(name_arg) or not AGENT_NAME.fullmatch(role):
+                return "error: unknown agent"
+            try:
+                return self.policy_text_for(role)
+            except FileNotFoundError:
+                return f"error: no policy for agent {name_arg}"
         if name == "search_incidents":
             if not self.memory:
                 return "[]"
-            return json.dumps(self.memory.search(str(args.get("query", "")))[:5])
+            try:
+                return json.dumps(self.memory.search(str(args.get("query", "")))[:5])
+            except Exception as e:
+                return f"error: incident search failed: {type(e).__name__}"
         return f"error: unknown tool {name}"
 
     def _parse(self, args: dict, known: dict[str, Span]) -> list[Finding]:
@@ -166,12 +195,14 @@ class Investigator:
                 if math.isnan(confidence):
                     continue
                 confidence = max(0.0, min(1.0, confidence))
-                claim = str(item.get("claim", ""))[:1000]
+                claim = str(item.get("claim", "")).strip()[:1000]
                 ids = [str(x) for x in ids]
             except (KeyError, TypeError, ValueError, AttributeError):
                 continue
+            if not claim:
+                continue
             valid = list(dict.fromkeys(i for i in ids if i in known))
-            if not any(known[i].kind == "TOOL" and known[i].name != "run_stopped" for i in valid):
+            if not any(known[i].kind == "TOOL" and tool_call(known[i]) is not None for i in valid):
                 continue
             if len(valid) < len(set(ids)):
                 confidence = min(confidence, 0.45)
@@ -211,16 +242,17 @@ class Investigator:
             if force:
                 forced_rounds += 1
                 if forced_rounds > MAX_FORCED_ROUNDS:
-                    return []
+                    raise InvestigationError("no valid submit_findings after forced rounds")
             msg = self._complete(messages, force, tag)
             messages.append(assistant_message(msg))
             if not msg.tool_calls:
                 if force:
-                    return []
+                    raise InvestigationError("model replied in text when submit_findings was forced")
                 messages.append({"role": "user", "content": "Call submit_findings to finish."})
                 calls += 1
                 continue
             for tc in msg.tool_calls:
+                over_budget = calls >= self.max_calls
                 calls += 1
                 try:
                     args = json.loads(tc.function.arguments or "{}")
@@ -232,8 +264,8 @@ class Investigator:
                     continue
                 if tc.function.name == "submit_findings":
                     return self._parse(args, known)
-                try:
+                if over_budget:
+                    result = "error: tool budget exhausted"
+                else:
                     result = self._run_tool(tc.function.name, args, allowed, agent, known, spans_of)
-                except Exception as e:
-                    result = f"error: {tc.function.name} failed: {type(e).__name__}: {e}"
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
