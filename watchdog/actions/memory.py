@@ -9,20 +9,28 @@ import anyio
 
 from common.config import REPO_ROOT, tool_env
 
-INCIDENT_MARKERS = ("docs/incidents/",)
+NOTE_PREFIX = "docs/incidents/"
 FACT_PREFIXES = ("incidents.", "project.incidents.")
-_REF_KEYS = ("path", "source", "id", "file", "uri")
+_REF_KEYS = ("path", "file", "uri", "source", "id")
+_ROOT = str(REPO_ROOT).replace("\\", "/").rstrip("/") + "/"
 _MCP_TIMEOUT_S = 20
 _CLI_TIMEOUT_S = 60
 
 
 def filter_hits(items: list[dict]) -> list[dict]:
-    keep = []
-    for item in items:
-        refs = [str(item.get(k, "")) for k in _REF_KEYS]
-        if any(m in r for r in refs for m in INCIDENT_MARKERS) or any(r.startswith(FACT_PREFIXES) for r in refs):
-            keep.append(item)
-    return keep
+    return [i for i in items if _is_incident_ref(_canonical_ref(i))]
+
+
+def _canonical_ref(item: dict) -> str:
+    ref = next((v for k in _REF_KEYS if isinstance(v := item.get(k), str) and v), "")
+    ref = ref.replace("\\", "/").removeprefix("file://").removeprefix(_ROOT).removeprefix("./")
+    return "" if ".." in ref.split("/") else ref
+
+
+def _is_incident_ref(ref: str) -> bool:
+    if ref.startswith(NOTE_PREFIX):
+        return ref.endswith(".md") and len(ref.rsplit("/", 1)[-1]) > 3
+    return any(ref.startswith(p) and len(ref) > len(p) for p in FACT_PREFIXES)
 
 
 def items_from_result(result) -> list[dict]:
@@ -50,12 +58,15 @@ class GrepMemory:
         self.directory = Path(directory)
 
     def search(self, query: str, k: int = 5) -> list[str]:
-        if not self.directory.exists():
+        if not self.directory.is_dir():
             return []
         words = {w.lower() for w in re.findall(r"\w+", query) if len(w) > 2}
         scored = []
         for path in sorted(self.directory.glob("*.md")):
-            text = path.read_text(encoding="utf-8")
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
             score = sum(text.lower().count(w) for w in words)
             if score:
                 scored.append((score, text[:1500]))
@@ -67,12 +78,14 @@ class GrepMemory:
 
 class BrainMemory:
     def __init__(self, repo: Path = REPO_ROOT, exe: str = "entire", query_tool: str = "brain_query",
-                 query_arg: str = "query", refresh_tool: str = "brain_refresh", read_only: bool = False):
+                 query_arg: str = "query", refresh_tool: str = "brain_refresh", read_only: bool = False,
+                 query_limit: int = 50):
         self.repo = Path(repo)
         self.exe = exe
         self.query_tool, self.query_arg = query_tool, query_arg
         self.refresh_tool = refresh_tool
         self.read_only = read_only
+        self.query_limit = query_limit
         self.incidents_dir = self.repo / "docs" / "incidents"
         self.fallback = GrepMemory(self.incidents_dir)
 
@@ -92,31 +105,36 @@ class BrainMemory:
 
     def search(self, query: str, k: int = 5) -> list[str]:
         try:
-            results = anyio.run(self._call, [(self.query_tool, {self.query_arg: query})])
+            results = anyio.run(self._call, [(self.query_tool, {self.query_arg: query, "limit": self.query_limit})])
+            texts = list(dict.fromkeys(_item_text(i) for i in filter_hits(items_from_result(results[0]))))[:k]
         except Exception:
-            return self.fallback.search(query, k)
-        texts = [_item_text(i) for i in filter_hits(items_from_result(results[0]))][:k]
-        return texts or self.fallback.search(query, k)
+            texts = []
+        try:
+            return texts or self.fallback.search(query, k)
+        except Exception:
+            return []
 
     def remember(self, case_id: str, category: str, text: str) -> bool:
-        if self.read_only:
+        if self.read_only or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", case_id) \
+                or not re.fullmatch(r"[A-Za-z0-9_]{1,16}", category):
             return False
-        self.incidents_dir.mkdir(parents=True, exist_ok=True)
-        note = self.incidents_dir / f"{case_id}.md"
-        if not note.exists():
-            note.write_text(f"# Incident {case_id} ({category})\n\n{text}\n", encoding="utf-8")
-        fact = f"Incident {case_id} ({category}): {text}"
         try:
+            self.incidents_dir.mkdir(parents=True, exist_ok=True)
+            note = self.incidents_dir / f"{case_id}.md"
+            if not note.exists():
+                note.write_text(f"# Incident {case_id} ({category})\n\n{text}\n", encoding="utf-8")
+            fact = f"Incident {case_id} ({category}): {text}"
             proc = subprocess.run([self.exe, "brain", "remember", fact, "--path",
                                    f"project.incidents.{category.lower()}", "--json"],
                                   cwd=self.repo, env=tool_env(), capture_output=True, text=True,
+                                  stdin=subprocess.DEVNULL, encoding="utf-8", errors="replace",
                                   timeout=_CLI_TIMEOUT_S)
-        except (OSError, subprocess.TimeoutExpired):
-            return False
-        if proc.returncode != 0:
-            return False
-        try:
-            anyio.run(self._call, [(self.refresh_tool, {})])
+            if proc.returncode != 0:
+                return False
+            try:
+                anyio.run(self._call, [(self.refresh_tool, {})])
+            except Exception:
+                pass
+            return True
         except Exception:
-            pass
-        return True
+            return False
