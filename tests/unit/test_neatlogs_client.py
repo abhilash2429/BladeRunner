@@ -96,10 +96,34 @@ def test_list_hits_returns_cursor():
     assert hits[0]["id"] == "h1" and cursor == "n"
 
 
-def test_merge_tags_caps_and_removes():
-    existing = ["agent:a_1", "quarantined"]
-    out = merge_tags(existing, add=["bladerunner", "fixed"] + [f"x{i}" for i in range(20)], remove=["quarantined"])
-    assert out[:3] == ["agent:a_1", "bladerunner", "fixed"] and len(out) == 10 and "quarantined" not in out
+def test_merge_tags_removes_and_dedupes():
+    out = merge_tags(["agent:a_1", "quarantined", "x"], add=["bladerunner", "x", "fixed"], remove=["quarantined"])
+    assert out == ["agent:a_1", "x", "bladerunner", "fixed"]
+
+
+def test_merge_tags_evicts_foreign_tags_before_dropping_adds():
+    existing = [f"user{i}" for i in range(7)] + ["cat:C9", "bladerunner", "incident:old"]
+    add = ["bladerunner", "verified", "incident:new", "cat:C1", "cat:C3"]
+    assert merge_tags(existing, add=add) == ["user4", "user5", "user6", "cat:C9", "bladerunner", "incident:old",
+                                             "verified", "incident:new", "cat:C1", "cat:C3"]
+
+
+def test_merge_tags_evicts_owned_old_tags_only_after_foreign_ones():
+    existing = ["u1", "cat:C9", "incident:old", "quarantined"]
+    add = [f"cat:C{i}" for i in range(1, 9)] + ["bladerunner", "verified"]
+    assert merge_tags(existing, add=add) == add
+
+
+def test_merge_tags_with_nine_existing_keeps_all_adds():
+    existing = [f"user{i}" for i in range(9)]
+    add = ["bladerunner", "verified", "incident:x", "quarantined", "cat:C1", "cat:C3"]
+    out = merge_tags(existing, add=add)
+    assert len(out) == 10 and all(t in out for t in add) and out[:4] == [f"user{i}" for i in range(5, 9)]
+
+
+def test_merge_tags_truncates_trailing_adds_only_when_adds_alone_exceed_cap():
+    add = [f"t{i}" for i in range(12)]
+    assert merge_tags(["u"], add=add) == add[:10]
 
 
 def test_derive_key_is_stable_uuid_shaped():

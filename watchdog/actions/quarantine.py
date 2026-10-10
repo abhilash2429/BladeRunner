@@ -21,7 +21,10 @@ class ControlClient:
             raise ControlError(f"{method} {path}: {type(e).__name__}") from e
         if r.status_code >= 400:
             raise ControlError(f"{method} {path}: {r.status_code}")
-        return r.json()
+        try:
+            return r.json()
+        except ValueError as e:
+            raise ControlError(f"{method} {path}: non-JSON response") from e
 
     def pause(self, run_id: str, agent: str) -> None:
         self._send("POST", f"/runs/{run_id}/pause", {"agent": agent})

@@ -4,14 +4,13 @@ import httpx
 
 from watchdog.actions.quarantine import ControlClient
 
-WATCHDOG_ROUTES = ("/pause", "/stop", "/resume", "/confirm")
-
 
 def test_control_client_only_touches_watchdog_routes():
-    paths = []
+    seen = []
 
     def handler(req):
-        paths.append((req.method, req.url.path))
+        body = json.loads(req.content) if req.content else None
+        seen.append((req.method, req.url.path, body))
         if req.url.path.startswith("/confirm/"):
             return httpx.Response(200, json={"status": "done", "rerun_clean": True, "control_clean": True,
                                              "rerun_ids": ["a"]})
@@ -25,6 +24,11 @@ def test_control_client_only_touches_watchdog_routes():
     c.resume("r1", "a_1")
     assert c.confirm("r1", "a_1")["job_id"] == "j1"
     assert c.confirm_status("j1")["status"] == "done"
-    for method, path in paths:
-        assert path.startswith("/confirm/") or path.endswith(WATCHDOG_ROUTES), path
-    assert not any("agent-config" in p or p == "/runs" for _, p in paths)
+    body = {"agent": "a_1"}
+    assert seen == [
+        ("POST", "/runs/r1/pause", body),
+        ("POST", "/runs/r1/stop", body),
+        ("POST", "/runs/r1/resume", body),
+        ("POST", "/runs/r1/confirm", body),
+        ("GET", "/confirm/j1", None),
+    ]

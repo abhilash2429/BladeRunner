@@ -33,11 +33,24 @@ def derive_key(base: str, purpose: str) -> str:
     return str(uuid.UUID(bytes=digest, version=4))
 
 
+OWNED_TAGS = frozenset({"bladerunner", "quarantined", "quarantine_failed", "verified", "needs_review", "patched",
+                        "patch_failed", "fixed", "not_fixed"})
+OWNED_PREFIXES = ("bladerunner", "cat:", "incident:")
+
+
+def _owned(tag: str) -> bool:
+    return tag in OWNED_TAGS or tag.startswith(OWNED_PREFIXES)
+
+
 def merge_tags(existing, add=(), remove=(), cap: int = 10) -> list[str]:
-    out = [t for t in existing if t not in remove]
-    for tag in add:
-        if tag not in out and tag not in remove:
-            out.append(tag)
+    adds = [t for t in dict.fromkeys(add) if t not in remove]
+    base = [t for t in dict.fromkeys(existing) if t not in remove]
+    out = base + [t for t in adds if t not in base]
+    need = len(out) - cap
+    if need > 0:
+        evictable = [t for t in base if t not in adds]
+        victims = ([t for t in evictable if not _owned(t)] + [t for t in evictable if _owned(t)])[:need]
+        out = [t for t in out if t not in victims]
     return out[:cap]
 
 
