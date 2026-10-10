@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import subprocess
 import threading
 import time
@@ -17,6 +18,7 @@ from common.policy import load_policy_text, role_of
 
 WATCHDOG_KEYS = frozenset({"ok", "job_id", "status", "rerun_clean", "control_clean", "rerun_ids"})
 CONFIRM_RERUNS = 3
+log = logging.getLogger(__name__)
 BASE_TOOLS = ["fetch", "submit_answer", "notes_read", "notes_write"]
 
 
@@ -107,18 +109,23 @@ def create_app(state: ArenaState, launcher, settle_seconds: float = 2.0) -> Fast
 
         def work():
             try:
-                for rid in reruns:
-                    launcher.run(rid, run["agents"])
-                launcher.run(control_id, run["agents"])
+                codes = {rid: launcher.run(rid, run["agents"]) for rid in reruns + [control_id]}
                 time.sleep(settle_seconds)
+
+                def healthy(rid: str) -> bool:
+                    acted = any(r["agent"] == body.agent for r in state.requests_for(rid))
+                    return codes[rid] == 0 and acted
+
                 job["rerun_clean"] = all(
-                    not [l for l in label_run(state, rid) if l.agent == body.agent] for rid in reruns)
-                job["control_clean"] = not label_run(state, control_id)
+                    healthy(rid) and not [l for l in label_run(state, rid) if l.agent == body.agent]
+                    for rid in reruns)
+                job["control_clean"] = healthy(control_id) and not label_run(state, control_id)
+                job["status"] = "done"
             except Exception:
+                log.exception("confirm job %s failed", job_id)
                 job["rerun_clean"] = False
                 job["control_clean"] = False
-            finally:
-                job["status"] = "done"
+                job["status"] = "error"
 
         threading.Thread(target=work, daemon=True).start()
         return {"job_id": job_id, "rerun_ids": job["rerun_ids"]}
