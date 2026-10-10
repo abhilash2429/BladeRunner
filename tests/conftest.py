@@ -1,3 +1,4 @@
+import copy
 import json
 from types import SimpleNamespace
 
@@ -20,7 +21,7 @@ class ScriptedLLM:
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
     def _create(self, **kwargs):
-        self.requests.append({**kwargs, "messages": [dict(m) for m in kwargs.get("messages", [])]})
+        self.requests.append({**kwargs, "messages": copy.deepcopy(kwargs.get("messages", []))})
         return self.responses.pop(0)
 
 
