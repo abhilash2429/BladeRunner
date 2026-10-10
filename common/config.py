@@ -45,9 +45,18 @@ def _git_bin_dir() -> str | None:
     return None
 
 
+def _entire_plugin_bin() -> Path:
+    if os.name == "nt":
+        local = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
+        return local / "entire" / "plugins" / "bin"
+    if os.environ.get("ENTIRE_PLUGIN_DIR"):
+        return Path(os.environ["ENTIRE_PLUGIN_DIR"]) / "bin"
+    data = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    return data / "entire" / "plugins" / "bin"
+
+
 def tool_env() -> dict[str, str]:
-    local = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
-    extra = [str(Path.home() / ".local" / "bin"), str(local / "entire" / "plugins" / "bin")]
+    extra = [str(Path.home() / ".local" / "bin"), str(_entire_plugin_bin())]
     git_bin = _git_bin_dir()
     if git_bin:
         extra.append(git_bin)

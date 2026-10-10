@@ -30,6 +30,16 @@ def test_tool_env_prepends_entire_dirs():
     assert "plugins" in path.split(os.pathsep)[1]
 
 
+@pytest.mark.skipif(os.name == "nt", reason="posix plugin layout")
+def test_tool_env_uses_posix_entire_plugin_dir(monkeypatch, tmp_path):
+    monkeypatch.delenv("ENTIRE_PLUGIN_DIR", raising=False)
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    plugin_bin = config.tool_env()["PATH"].split(os.pathsep)[1]
+    assert plugin_bin == str(Path.home() / ".local" / "share" / "entire" / "plugins" / "bin")
+    monkeypatch.setenv("ENTIRE_PLUGIN_DIR", str(tmp_path))
+    assert config.tool_env()["PATH"].split(os.pathsep)[1] == str(tmp_path / "bin")
+
+
 def _git_has_sibling_sh() -> bool:
     git = shutil.which("git")
     if git is None:
