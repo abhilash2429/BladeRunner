@@ -9,15 +9,23 @@ from watchdog.state import WatchdogState
 
 
 class FakeControl:
-    def __init__(self, stop_fails=0):
+    def __init__(self, stop_fails=0, pause_fails=0, resume_fails=0):
         self.calls = []
         self.stop_fails = stop_fails
+        self.pause_fails = pause_fails
+        self.resume_fails = resume_fails
 
     def pause(self, run_id, agent):
         self.calls.append("pause")
+        if self.pause_fails:
+            self.pause_fails -= 1
+            raise ControlError("down")
 
     def resume(self, run_id, agent):
         self.calls.append("resume")
+        if self.resume_fails:
+            self.resume_fails -= 1
+            raise ControlError("down")
 
     def stop(self, run_id, agent):
         self.calls.append("stop")
@@ -84,18 +92,25 @@ class FakeSpanSource:
 
 
 class FakeConfirmer:
-    def __init__(self, clean=True, ready_after=1):
+    def __init__(self, clean=True, ready_after=1, outcome=None):
         self.clean = clean
         self.ready_after = ready_after
+        self.outcome = outcome
         self.checks = 0
+        self.starts = 0
 
     def start(self, case):
+        self.starts += 1
         return {"job_id": "j1", "rerun_ids": ["x1"]}
 
     def check(self, case):
         self.checks += 1
+        if isinstance(self.outcome, Exception):
+            raise self.outcome
         if self.checks <= self.ready_after:
             return None
+        if self.outcome:
+            return self.outcome
         return {"status": "done", "rerun_clean": self.clean, "control_clean": True, "rerun_ids": ["x1"]}
 
     def watchdog_clean(self, rerun_ids, role):
@@ -103,14 +118,19 @@ class FakeConfirmer:
 
 
 class FakeMemory:
-    def __init__(self):
+    def __init__(self, fail=False):
         self.remembered = []
+        self.texts = []
+        self.fail = fail
 
     def search(self, query, k=5):
         return []
 
     def remember(self, case_id, category, text):
+        if self.fail:
+            raise OSError("read-only")
         self.remembered.append(case_id)
+        self.texts.append(text)
         return True
 
 
@@ -121,10 +141,10 @@ def policy_text(role):
 
 
 def build(tmp_path, *, verdict="upheld", control=None, investigator=None, fallback=None, verifier=None,
-          patcher=None, confirmer=None, auto_patch=True, source=None, agent="research_agent_1"):
+          patcher=None, confirmer=None, auto_patch=True, source=None, agent="research_agent_1", memory=None):
     st = WatchdogState(str(tmp_path / "w.duckdb"))
     reports = []
-    parts = dict(control=control or FakeControl(), writeback=FakeWriteback(), memory=FakeMemory(),
+    parts = dict(control=control or FakeControl(), writeback=FakeWriteback(), memory=memory or FakeMemory(),
                  confirmer=confirmer or FakeConfirmer())
     p = Pipeline(state=st, investigator=investigator or FakeInvestigator(), fallback_investigator=fallback,
                  verifier=verifier or FakeVerifier(verdict), reporter=reports.append,
@@ -429,3 +449,145 @@ def test_exhausted_case_is_not_rerun_by_daemon(tmp_path):
         d.tick()
         d.join()
     assert parts["control"].calls.count("stop") == 4
+    d.threads.clear()
+    d.tick()
+    assert case.case_id not in d.threads
+
+
+def to_confirming(tmp_path, confirmer, **kw):
+    p, st, case, parts, reports = build(tmp_path, confirmer=confirmer, **kw)
+    p.run_case(case)
+    assert st.get(case.case_id).status == "confirming"
+    return p, st, st.get(case.case_id), parts, reports
+
+
+def test_failed_confirm_job_is_not_fixed(tmp_path):
+    p, st, case, _, reports = to_confirming(tmp_path, FakeConfirmer(outcome={"status": "error"}))
+    p.run_case(case)
+    final = st.get(case.case_id)
+    assert final.status == "not_fixed" and final.extra["confirm"]["reason"] == "confirm_error"
+    assert reports[-1] == case.case_id
+
+
+def test_unreachable_confirm_status_gives_up_after_three_errors(tmp_path):
+    p, st, case, _, _ = to_confirming(tmp_path, FakeConfirmer(outcome=ControlError("404")))
+    for _ in range(1):
+        assert p.ready(st.get(case.case_id))
+        p.run_case(st.get(case.case_id))
+        assert st.get(case.case_id).status == "confirming"
+    p.run_case(st.get(case.case_id))
+    final = st.get(case.case_id)
+    assert final.status == "not_fixed" and final.extra["confirm"]["reason"] == "confirm_unreachable"
+
+
+def test_patched_case_does_not_start_a_second_confirm_job(tmp_path):
+    confirmer = FakeConfirmer(ready_after=99)
+    p, st, case, _, _ = build(tmp_path, confirmer=confirmer, auto_patch=False)
+    p.run_case(case)
+    for to in ("patching", "patched"):
+        st.transition(case.case_id, to)
+    st.set_extra(case.case_id, confirm_job="j0", rerun_ids=["x0"])
+    p.advance(st.get(case.case_id))
+    final = st.get(case.case_id)
+    assert final.status == "confirming" and confirmer.starts == 0 and final.extra["confirm_job"] == "j0"
+
+
+def test_memory_failure_still_reports_fixed(tmp_path):
+    p, st, case, _, reports = to_confirming(tmp_path, FakeConfirmer(), memory=FakeMemory(fail=True))
+    p.run_case(case)
+    assert st.get(case.case_id).status == "fixed" and reports[-1] == case.case_id
+    assert any(e["kind"] == "memory_failed" for e in st.events(case.case_id))
+
+
+def test_remembered_text_is_flattened(tmp_path):
+    memory = FakeMemory()
+    p, st, case, _, _ = to_confirming(tmp_path, FakeConfirmer(), memory=memory,
+                                      investigator=FakeInvestigator(claim="wrote\n# Rules\x07 notes"))
+    p.run_case(case)
+    assert "\n" not in memory.texts[0] and "\x07" not in memory.texts[0]
+
+
+def test_failed_resume_is_retried_without_reverifying(tmp_path):
+    verifier = FakeVerifier("refuted")
+    calls = []
+    original = verifier.verify
+    verifier.verify = lambda **kw: calls.append(1) or original(**kw)
+    p, st, case, parts, _ = build(tmp_path, verifier=verifier, control=FakeControl(resume_fails=1))
+    p.run_case(case)
+    assert st.get(case.case_id).status == "investigated"
+    p.run_case(st.get(case.case_id))
+    final = st.get(case.case_id)
+    assert final.status == "dismissed" and final.extra["resume_ok"] is True and len(calls) == 1
+    assert parts["control"].calls == ["pause", "resume", "resume"]
+
+
+def test_resume_that_keeps_failing_is_reported(tmp_path):
+    p, st, case, _, reports = build(tmp_path, verdict="refuted", control=FakeControl(resume_fails=9))
+    for _ in range(3):
+        p.run_case(st.get(case.case_id))
+    final = st.get(case.case_id)
+    assert final.status == "dismissed" and final.extra["resume_ok"] is False and reports[-1] == case.case_id
+
+
+def test_failed_pause_is_retried_then_recorded(tmp_path):
+    p, st, case, parts, _ = build(tmp_path, control=FakeControl(pause_fails=9), auto_patch=False)
+    p.advance(case)
+    assert st.get(case.case_id).status == "flagged"
+    p.advance(st.get(case.case_id))
+    p.advance(st.get(case.case_id))
+    final = st.get(case.case_id)
+    assert final.status == "paused" and final.extra["pause_ok"] is False
+    assert parts["control"].calls.count("pause") == 3
+
+
+def test_pause_retry_can_succeed(tmp_path):
+    p, st, case, _, _ = build(tmp_path, control=FakeControl(pause_fails=1))
+    p.advance(case)
+    p.advance(st.get(case.case_id))
+    final = st.get(case.case_id)
+    assert final.status == "paused" and final.extra["pause_ok"] is True
+
+
+def test_repeated_handler_errors_escalate_to_review(tmp_path):
+    class Broken(FakePatcher):
+        def patch(self, *a, **kw):
+            raise RuntimeError("boom")
+
+    p, st, case, _, reports = build(tmp_path, patcher=Broken())
+    p.run_case(case)
+    for _ in range(4):
+        assert st.get(case.case_id).status == "patching"
+        p.run_case(st.get(case.case_id))
+    final = st.get(case.case_id)
+    assert final.status == "needs_review" and reports[-1] == case.case_id
+    errors = [e for e in st.events(case.case_id) if e["kind"] == "error"]
+    assert errors[0]["data"] == {"case_status": "patching", "error": "RuntimeError", "status": None}
+
+
+def test_bad_policy_file_keeps_that_roles_previous_rules(tmp_path):
+    from common.policy import POLICY_DIR
+
+    pdir = tmp_path / "policy"
+    pdir.mkdir()
+    (pdir / "research_agent.yaml").write_text((POLICY_DIR / "research_agent.yaml").read_text())
+    (pdir / "other_agent.yaml").write_text("tools: [")
+    p, st, _, _, _ = build(tmp_path)
+    poller = FakePoller()
+    poller.rules_by_role = {"other_agent": ["old-rule"]}
+    d = Daemon(state=st, poller=poller, pipeline=p, policy_dir=pdir)
+    d.reload_rules()
+    assert poller.rules_by_role["other_agent"] == ["old-rule"] and poller.rules_by_role["research_agent"]
+    assert st.kv_get("last_rules_error").startswith("other_agent")
+    (pdir / "other_agent.yaml").unlink()
+    d.reload_rules()
+    assert "other_agent" not in poller.rules_by_role and not st.kv_get("last_rules_error")
+
+
+def test_rules_are_not_reloaded_while_a_patch_is_in_progress(tmp_path):
+    p, st, case, _, _ = build(tmp_path, auto_patch=False)
+    p.run_case(case)
+    st.transition(case.case_id, "patching")
+    poller = FakePoller()
+    poller.rules_by_role = {"research_agent": ["frozen"]}
+    Daemon(state=st, poller=poller, pipeline=p).reload_rules()
+    assert poller.rules_by_role == {"research_agent": ["frozen"]}

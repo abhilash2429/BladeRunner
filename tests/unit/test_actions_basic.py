@@ -259,6 +259,21 @@ def test_report_confirm_is_allowlisted(st, tmp_path, monkeypatch):
                                                            "watchdog_clean": True}
 
 
+def test_report_shows_failed_control_actions_and_confirm_reason(st, tmp_path, monkeypatch):
+    monkeypatch.setenv("NEATLOGS_TRACE_URL", "https://app.example/traces/{trace_id}")
+    case = open_case(st)
+    st.transition(case.case_id, "paused")
+    st.set_findings(case.case_id, [UP.__dict__])
+    st.set_extra(case.case_id, pause_ok=False, resume_ok=False, confirm={"reason": "confirm_timeout"})
+    md, js = Reporter(st, tmp_path / "incidents")(case.case_id)
+    text = md.read_text(encoding="utf-8")
+    assert "- Paused: pause failed" in text and "Resume failed" in text
+    assert "Not confirmed: confirm\\_timeout" in text
+    data = json.loads(js.read_text(encoding="utf-8"))["case"]
+    assert data["paused_at"] is None and data["extra"]["pause_ok"] is False and data["extra"]["resume_ok"] is False
+    assert data["extra"]["confirm"] == {"reason": "confirm_timeout"}
+
+
 def test_json_report_keeps_raw_finding_text_capped(st, tmp_path, monkeypatch):
     monkeypatch.setenv("NEATLOGS_TRACE_URL", "https://app.example/traces/{trace_id}")
     case = open_case(st)

@@ -35,9 +35,11 @@ class Poller:
     def _skip(self, info) -> bool:
         return bool(info.session_id and self.state.kv_get(f"confirm_session:{info.session_id}"))
 
-    def _record_error(self, e: Exception) -> None:
+    def _record_error(self, e: Exception, detail: str = "") -> None:
         self._errored = True
-        self.state.kv_set("last_poll_error", f"{type(e).__name__}: {e}"[:300])
+        status = getattr(e, "status", None)
+        text = type(e).__name__ + (f" {status}" if status else "") + (f": {detail}" if detail else "")
+        self.state.kv_set("last_poll_error", text[:300])
 
     def _poll_detection(self, detection_id: str, rule_id: str, flags: list[Flag]) -> None:
         cursor = None
@@ -79,11 +81,15 @@ class Poller:
     def _track_pending(self, trace_id: str) -> None:
         key = PENDING + trace_id
         first = self.state.kv_get(key)
-        if first is None:
+        try:
+            since = datetime.fromisoformat(first) if first else None
+        except ValueError:
+            since = None
+        if since is None or since.tzinfo is None:
             self.state.kv_set(key, self.now().isoformat())
-        elif self.now() - datetime.fromisoformat(first) > self.pending_max_age:
+        elif self.now() - since > self.pending_max_age:
             self.state.kv_delete(key)
-            self._record_error(TimeoutError(f"trace {trace_id} still not finalized, dropped"))
+            self._record_error(TimeoutError(), f"trace {trace_id} still not finalized, dropped")
 
     def _consider(self, info, flags: list[Flag]) -> None:
         if not info.agent or self._skip(info):

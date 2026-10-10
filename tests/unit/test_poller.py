@@ -226,6 +226,28 @@ def test_clean_pending_trace_is_dropped_once_evaluated(tmp_path):
     assert st.kv_keys("pending:") == [] and st.kv_get("seen:t_ok") == "1:finalized"
 
 
+def test_poll_error_keeps_type_and_status_but_not_the_body(tmp_path):
+    from watchdog.neatlogs_client import NeatlogsError
+
+    p, st = make(tmp_path)
+
+    def boom(since, until):
+        raise NeatlogsError(503, "upstream said SECRET-BODY")
+
+    p.source.list_traces = boom
+    p.tick()
+    assert st.kv_get("last_poll_error") == "NeatlogsError 503"
+
+
+def test_corrupt_pending_timestamp_is_reset(tmp_path):
+    p, st = make(tmp_path)
+    info, spans = p.source.traces["t_bad"]
+    p.source.traces["t_bad"] = (pending(info), spans)
+    st.kv_set("pending:t_bad", "not-a-time")
+    p.tick()
+    assert st.kv_get("pending:t_bad") == NOW.isoformat()
+
+
 def test_pending_trace_is_dropped_after_max_age(tmp_path):
     p, st = make(tmp_path)
     clock = {"now": NOW}

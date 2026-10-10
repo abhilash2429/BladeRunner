@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import threading
 import time
 from dataclasses import asdict
@@ -13,6 +14,9 @@ from watchdog.investigator import Finding
 from watchdog.verifier import decide
 
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
+
+
 def _err(e: Exception) -> dict:
     return {"error": type(e).__name__, "status": getattr(e, "status", None)}
 
@@ -20,7 +24,8 @@ def _err(e: Exception) -> dict:
 class Pipeline:
     def __init__(self, *, state, control, investigator, verifier, writeback, reporter, patcher, confirmer, memory,
                  source=None, fallback_investigator=None, policy_text_for=load_policy_text, auto_patch: bool = True,
-                 stop_retries: int = 3, patch_retries: int = 1, verify_retries: int = 3):
+                 stop_retries: int = 3, patch_retries: int = 1, verify_retries: int = 3, control_retries: int = 3,
+                 confirm_retries: int = 3, error_retries: int = 5):
         self.state = state
         self.control = control
         self.investigator = investigator
@@ -37,6 +42,9 @@ class Pipeline:
         self.stop_retries = stop_retries
         self.patch_retries = patch_retries
         self.verify_retries = verify_retries
+        self.control_retries = control_retries
+        self.confirm_retries = confirm_retries
+        self.error_retries = error_retries
 
     @staticmethod
     def _findings(case) -> list[Finding]:
@@ -91,7 +99,12 @@ class Pipeline:
         try:
             return handler(case)
         except Exception as e:
-            self.state.log_event(case.case_id, "error", {"status": case.status, **_err(e)})
+            self.state.log_event(case.case_id, "error", {"case_status": case.status, **_err(e)})
+            try:
+                if self.state.bump_retry(case.case_id, "error") >= self.error_retries:
+                    self._needs_review(self.state.get(case.case_id), self._findings(case))
+            except Exception as e2:
+                self.state.log_event(case.case_id, "escalation_failed", _err(e2))
             return False
 
     def run_case(self, case, max_steps: int = 12) -> None:
@@ -107,10 +120,15 @@ class Pipeline:
         return False
 
     def _on_flagged(self, case) -> bool:
+        ok = True
         try:
             self.control.pause(case.run_id, case.agent)
         except ControlError as e:
             self.state.log_event(case.case_id, "pause_failed", _err(e))
+            if self.state.bump_retry(case.case_id, "pause") < self.control_retries:
+                return False
+            ok = False
+        self.state.set_extra(case.case_id, pause_ok=ok)
         self.state.transition(case.case_id, "paused")
         return True
 
@@ -140,7 +158,24 @@ class Pipeline:
         self.state.transition(case.case_id, "investigated")
         return True
 
+    def _dismiss(self, case) -> bool:
+        try:
+            self.control.resume(case.run_id, case.agent)
+        except ControlError as e:
+            self.state.log_event(case.case_id, "resume_failed", _err(e))
+            if self.state.bump_retry(case.case_id, "resume") < self.control_retries:
+                return False
+            self.state.set_extra(case.case_id, pending_dismissal=False, resume_ok=False)
+            self.state.transition(case.case_id, "dismissed")
+            self.reporter(case.case_id)
+            return False
+        self.state.set_extra(case.case_id, pending_dismissal=False, resume_ok=True)
+        self.state.transition(case.case_id, "dismissed")
+        return False
+
     def _on_investigated(self, case) -> bool:
+        if case.extra.get("pending_dismissal"):
+            return self._dismiss(case)
         try:
             verified = self.verifier.verify(trace_id=case.trace_id, session_id=case.run_id,
                                             findings=self._findings(case), tag=case.case_id)
@@ -153,12 +188,10 @@ class Pipeline:
         outcome = decide(verified)
         if outcome == "needs_review":
             return self._needs_review(case, verified)
-        self.state.transition(case.case_id, outcome)
         if outcome == "dismissed":
-            try:
-                self.control.resume(case.run_id, case.agent)
-            except ControlError as e:
-                self.state.log_event(case.case_id, "resume_failed", _err(e))
+            self.state.set_extra(case.case_id, pending_dismissal=True)
+            return self._dismiss(case)
+        self.state.transition(case.case_id, outcome)
         return outcome == "verified"
 
     def _stop(self, case) -> bool:
@@ -218,15 +251,44 @@ class Pipeline:
         return True
 
     def _on_patched(self, case) -> bool:
-        out = self.confirmer.start(case)
-        self.state.set_extra(case.case_id, confirm_job=out["job_id"], rerun_ids=out["rerun_ids"])
+        if not case.extra.get("confirm_job"):
+            out = self.confirmer.start(case)
+            self.state.set_extra(case.case_id, confirm_job=out["job_id"], rerun_ids=out["rerun_ids"])
         self.state.transition(case.case_id, "confirming")
         return True
 
+    def _not_fixed(self, case, reason: str) -> bool:
+        self.state.set_extra(case.case_id, confirm={"reason": reason})
+        self.state.transition(case.case_id, "not_fixed")
+        self.reporter(case.case_id)
+        return False
+
+    def _remember(self, case, findings: list[Finding]) -> None:
+        ups = [f for f in findings if f.verdict == "upheld"]
+        summary = _CONTROL.sub(" ", "; ".join(f"{f.category}: {f.claim}" for f in ups))[:600]
+        patch = case.extra.get("patch") or {}
+        try:
+            ok = self.memory.remember(case.case_id, ups[0].category if ups else "C0",
+                                      f"Agent {case.agent}: {summary}. Fixed by commit {patch.get('sha')} "
+                                      f"touching {', '.join(patch.get('paths') or [])}. Confirmed clean on re-run.")
+        except Exception as e:
+            self.state.log_event(case.case_id, "memory_failed", _err(e))
+            return
+        if not ok:
+            self.state.log_event(case.case_id, "memory_failed", {"error": "not stored"})
+
     def _on_confirming(self, case) -> bool:
-        status = self.confirmer.check(case)
+        try:
+            status = self.confirmer.check(case)
+        except Exception as e:
+            self.state.log_event(case.case_id, "confirm_check_failed", _err(e))
+            if self.state.bump_retry(case.case_id, "confirm") >= self.confirm_retries:
+                return self._not_fixed(case, "confirm_unreachable")
+            return False
         if status is None:
             return False
+        if status.get("status") != "done":
+            return self._not_fixed(case, f"confirm_{status.get('status')}")
         watchdog_clean = self.confirmer.watchdog_clean(status["rerun_ids"], role_of(case.agent))
         clean = bool(status["rerun_clean"]) and bool(status["control_clean"]) and watchdog_clean
         self.state.set_extra(case.case_id, confirm={**status, "watchdog_clean": watchdog_clean})
@@ -234,12 +296,7 @@ class Pipeline:
         findings = self._findings(case)
         if clean:
             self.writeback.tag(case, findings, "fixed", remove=("quarantined",))
-            ups = [f for f in findings if f.verdict == "upheld"]
-            summary = "; ".join(f"{f.category}: {f.claim}" for f in ups)
-            patch = case.extra.get("patch") or {}
-            self.memory.remember(case.case_id, ups[0].category if ups else "C0",
-                                 f"Agent {case.agent}: {summary}. Fixed by commit {patch.get('sha')} "
-                                 f"touching {', '.join(patch.get('paths') or [])}. Confirmed clean on re-run.")
+            self._remember(case, findings)
         self.reporter(case.case_id)
         return False
 
@@ -259,9 +316,23 @@ class Daemon:
         self.threads: dict[str, threading.Thread] = {}
 
     def reload_rules(self) -> None:
+        if self.state.active_cases("patching"):
+            return
         roles = [p.stem for p in sorted(self.policy_dir.glob("*.yaml")) if p.stem != "catalog"]
-        rules = {r: compile_policy(load_policy(r, self.policy_dir)) for r in roles}
+        previous = self.poller.rules_by_role
+        rules, errors = {}, []
+        for role in roles:
+            try:
+                rules[role] = compile_policy(load_policy(role, self.policy_dir))
+            except Exception as e:
+                errors.append(f"{role}: {type(e).__name__}")
+                if role in previous:
+                    rules[role] = previous[role]
         self.poller.rules_by_role = rules
+        if errors:
+            self.state.kv_set("last_rules_error", "; ".join(errors)[:300])
+        elif self.state.kv_get("last_rules_error"):
+            self.state.kv_set("last_rules_error", "")
         if self.client and self.group_id:
             try:
                 self.poller.detections = ensure_detections(self.client, [x for rs in rules.values() for x in rs],
@@ -296,7 +367,7 @@ class Daemon:
         try:
             self._run(case)
         except Exception as e:
-            self.state.log_event(case.case_id, "error", {"status": "thread", **_err(e)})
+            self.state.log_event(case.case_id, "error", {"case_status": "thread", **_err(e)})
 
     def _spawn(self, case) -> None:
         if self._alive(case.case_id):
@@ -316,6 +387,8 @@ class Daemon:
             if not self._alive(case.case_id):
                 self.pipeline.advance(case)
         for case in self.state.active_cases():
+            if case.status != "confirming" and not self.pipeline.ready(case):
+                continue
             self._spawn(case)
 
     def run_forever(self) -> None:

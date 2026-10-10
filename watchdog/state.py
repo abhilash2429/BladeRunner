@@ -10,18 +10,18 @@ from datetime import datetime, timezone
 import duckdb
 
 TRANSITIONS: dict[str, set[str]] = {
-    "flagged": {"paused"},
-    "paused": {"investigating"},
+    "flagged": {"paused", "needs_review"},
+    "paused": {"investigating", "needs_review"},
     "investigating": {"investigated", "needs_review"},
     "investigated": {"verified", "needs_review", "dismissed"},
     "dismissed": {"flagged"},
-    "verified": {"quarantined", "quarantine_failed"},
-    "quarantine_failed": {"quarantined"},
-    "quarantined": {"patching"},
-    "patching": {"patched", "patch_failed"},
-    "patch_failed": {"patching"},
-    "patched": {"confirming"},
-    "confirming": {"fixed", "not_fixed"},
+    "verified": {"quarantined", "quarantine_failed", "needs_review"},
+    "quarantine_failed": {"quarantined", "needs_review"},
+    "quarantined": {"patching", "needs_review"},
+    "patching": {"patched", "patch_failed", "needs_review"},
+    "patch_failed": {"patching", "needs_review"},
+    "patched": {"confirming", "needs_review"},
+    "confirming": {"fixed", "not_fixed", "needs_review"},
 }
 ACTIVE = ("flagged", "paused", "investigating", "investigated", "verified", "quarantine_failed", "quarantined",
           "patching", "patch_failed", "patched", "confirming")

@@ -17,7 +17,7 @@ EVENT_KEYS = ("to", "from", "ok", "span_id", "status", "categories")
 EVIDENCE_KEYS = ("rule_id", "span_id", "kind")
 FINDING_KEYS = ("category", "claim", "reason", "verdict", "confidence")
 JSON_TEXT_LIMIT = 1000
-CONFIRM_KEYS = ("rerun_clean", "control_clean", "watchdog_clean")
+CONFIRM_KEYS = ("rerun_clean", "control_clean", "watchdog_clean", "reason")
 _ESCAPE = re.compile(r"([\\`*_\[\]<>!()])")
 _STRIP = re.compile("[\x00-\x08\x0b-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069]")
 
@@ -29,8 +29,11 @@ TEMPLATE = """# Incident {{ case.case_id | md_cell }}: {{ title | md_cell }}
 - Trace: [{{ case.trace_id | md_cell }}]({{ url }})
 - Detected by: {{ case.source | md_cell }}
 - Flagged: {{ case.flagged_at | md_cell }}
-- Paused: {{ (case.paused_at or "not paused") | md_cell }}
+- Paused: {{ "pause failed" if pause_failed else (case.paused_at or "not paused") | md_cell }}
 - Quarantined: {{ (case.quarantined_at or "not quarantined") | md_cell }}
+{% if resume_failed -%}
+- Resume failed: the agent may still be paused
+{% endif %}
 
 ## Findings
 
@@ -58,7 +61,9 @@ No patch applied.
 {% endif %}
 ## Confirmation
 
-{% if confirm -%}
+{% if confirm and confirm.reason -%}
+Not confirmed: {{ confirm.reason | md_cell }}
+{% elif confirm -%}
 - Re-runs clean in ground truth: {{ confirm.rerun_clean | md_cell }}
 - Clean-scenario control run passed: {{ confirm.control_clean | md_cell }}
 - Watchdog view of re-runs clean: {{ confirm.watchdog_clean | md_cell }}
@@ -132,6 +137,9 @@ def _safe_extra(extra: dict) -> dict:
                         for k in ("ok", "sha", "checkpoint", "paths", "attempts", "reason") if k in patch}
     if isinstance(extra.get("confirm"), dict):
         out["confirm"] = {k: extra["confirm"][k] for k in CONFIRM_KEYS if k in extra["confirm"]}
+    for k in ("pause_ok", "resume_ok"):
+        if isinstance(extra.get(k), bool):
+            out[k] = extra[k]
     return out
 
 
@@ -157,13 +165,16 @@ class Reporter:
         md.write_text(self.template.render(case=case, findings=case.findings, events=events, title=title,
                                            url=trace_url(case.trace_id), span_url=span_url,
                                            patch=patch, confirm=case.extra.get("confirm"),
+                                           pause_failed=case.extra.get("pause_ok") is False,
+                                           resume_failed=case.extra.get("resume_ok") is False,
                                            why=why, why_fence=fence_for(why)),
                       encoding="utf-8")
         js = self.out_dir / f"{case_id}.json"
         case_data = {"case_id": case.case_id, "trace_id": case.trace_id, "run_id": case.run_id,
                      "agent": case.agent, "status": case.status, "source": case.source,
                      "evidence": _safe_evidence(case.evidence), "flagged_at": case.flagged_at,
-                     "paused_at": case.paused_at, "quarantined_at": case.quarantined_at,
+                     "paused_at": None if case.extra.get("pause_ok") is False else case.paused_at,
+                     "quarantined_at": case.quarantined_at,
                      "extra": _safe_extra(case.extra)}
         js.write_text(json.dumps({"case": case_data, "findings": [_safe_finding(f) for f in case.findings],
                                   "events": events, "trace_url": trace_url(case.trace_id)},
