@@ -1,0 +1,34 @@
+{
+  "data": {
+    "page": {
+      "hasMore": false,
+      "limit": 50,
+      "nextCursor": null
+    },
+    "traces": [
+      {
+        "completedAt": "2026-10-10T16:19:58.445Z",
+        "durationMs": 0,
+        "finalizationStatus": "pending",
+        "framework": "",
+        "ingestedAt": "2026-10-10T16:19:58.446Z",
+        "llmCallsCount": 0,
+        "sessionId": "25881a8c1ca64f97bda35464386de3ba",
+        "spansCount": 0,
+        "startedAt": "2026-10-10T16:19:56.634Z",
+        "status": "OK",
+        "tags": [
+          "agent:day1_agent"
+        ],
+        "toolCallsCount": 0,
+        "totalCostUsd": 0,
+        "totalTokens": 0,
+        "traceId": "25881a8c1ca64f97bda35464386de3ba",
+        "traceName": "day1_notes_write",
+        "workflowName": "day1-visibility"
+      }
+    ]
+  },
+  "requestId": "req_da51479a4886439d66929e26632f5143",
+  "success": true
+}

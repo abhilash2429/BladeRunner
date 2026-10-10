@@ -1,0 +1,10 @@
+{
+  "code": "TRACE_PROCESSING",
+  "detail": "The trace is still being finalized. Retry the request shortly.",
+  "instance": "/api/v1/public/traces/25881a8c1ca64f97bda35464386de3ba/spans",
+  "requestId": "req_2e0d324ee777105667918f1ed5f7fc90",
+  "retryable": true,
+  "status": 409,
+  "title": "Trace Processing",
+  "type": "urn:neatlogs:problem:trace-processing"
+}
