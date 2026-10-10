@@ -133,6 +133,9 @@ class NeatlogsClient:
     def get_spans(self, trace_id: str) -> list[dict]:
         return self._paged(f"/traces/{trace_id}/spans", "spans", {"limit": 50})
 
+    def get_raw_spans(self, trace_id: str) -> list[dict]:
+        return self._paged(f"/traces/{trace_id}/raw-spans", "spans", {"limit": 25})
+
     def get_payload(self, trace_id: str, span_id: str, fields=("input", "output")) -> dict:
         return _data(self.request("GET", f"/traces/{trace_id}/spans/{span_id}/payload",
                                   params={"fields": ",".join(fields)}))

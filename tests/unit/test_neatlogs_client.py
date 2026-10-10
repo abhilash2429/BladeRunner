@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -218,9 +219,39 @@ def test_patch_trace_sends_uuid_idempotency_keys():
     assert keys == [derive_key("case-1", "patch0")]
 
 
-def test_cli_exe_resolution_falls_back_to_name(monkeypatch):
+def test_cli_disables_itself_when_node_cli_missing(monkeypatch, caplog):
     monkeypatch.setenv("PATH", "")
-    assert NeatlogsCLI().exe == "neatlogs"
+    with caplog.at_level("WARNING"):
+        cli = NeatlogsCLI(run=lambda *a, **k: 1 / 0)
+    assert cli.enabled is False and len([r for r in caplog.records if "neatlogs" in r.getMessage()]) == 1
+    assert cli.trace_feedback("t", {}, "k") == (False, "disabled")
+
+
+def test_cli_explicit_exe_stays_enabled(monkeypatch):
+    monkeypatch.setenv("PATH", "")
+    assert NeatlogsCLI(exe="neatlogs").enabled is True
+
+
+def test_cli_env_omits_unset_project_id(monkeypatch):
+    monkeypatch.delenv("NEATLOGS_PROJECT_ID", raising=False)
+    assert "NEATLOGS_PROJECT_ID" not in NeatlogsCLI(exe="n").env()
+
+
+def test_cli_timeout_returns_false_timeout():
+    def fake_run(cmd, input, text, capture_output, env, timeout):
+        raise subprocess.TimeoutExpired(cmd, timeout)
+
+    assert NeatlogsCLI(exe="n", run=fake_run).trace_feedback("t", {}, "k") == (False, "timeout")
+
+
+def test_cli_failure_prefers_stderr_over_stdout():
+    def fake_run(cmd, input, text, capture_output, env, timeout):
+        class R:
+            returncode, stdout, stderr = 2, "partial out", "real error"
+
+        return R()
+
+    assert NeatlogsCLI(exe="n", run=fake_run).trace_feedback("t", {}, "k") == (False, "real error")
 
 
 def test_cli_span_feedback_args():
@@ -238,3 +269,100 @@ def test_cli_span_feedback_args():
     assert not ok and out == "boom"
     assert seen["cmd"] == ["n", "feedback", "span-set", "s", "--trace", "t", "--body-stdin",
                            "--idempotency-key", "k", "--json"]
+
+
+def test_get_raw_spans_paginates_with_raw_limit():
+    seen = []
+
+    def handler(req):
+        seen.append((req.url.path, dict(req.url.params)))
+        if "cursor" not in req.url.params:
+            return httpx.Response(200, json={"data": {"spans": [{"spanId": "a"}], "page": {"nextCursor": "c1"}}})
+        return httpx.Response(200, json={"data": {"spans": [{"spanId": "b"}], "page": {"nextCursor": None}}})
+
+    c, _ = client_with(handler)
+    assert [s["spanId"] for s in c.get_raw_spans("t1")] == ["a", "b"]
+    assert seen[0][0].endswith("/traces/t1/raw-spans") and seen[0][1]["limit"] == "25"
+    assert seen[1][1]["cursor"] == "c1"
+
+
+def test_retry_delay_clamps_and_rejects_bad_values():
+    assert retry_delay({"retry-after": "100000"}, 0) == 60.0
+    assert retry_delay({"ratelimit-reset": "9999999999"}, 0, now=1000000000.0) == 60.0
+    for bad in ("inf", "nan", "-5"):
+        assert 1.0 <= retry_delay({"retry-after": bad}, 0) <= 1.5
+    assert 1.0 <= retry_delay({"ratelimit-reset": "1000000000"}, 0, now=1000000500.0) <= 1.5
+
+
+@pytest.mark.parametrize("status", [429, 503])
+def test_post_retry_reuses_idempotency_key(status):
+    seen = []
+
+    def handler(req):
+        seen.append(req.headers["idempotency-key"])
+        if len(seen) == 1:
+            return httpx.Response(status, headers={"Retry-After": "1"})
+        return httpx.Response(201, json={"data": {"id": "d1"}})
+
+    c, _ = client_with(handler)
+    assert c.create_detection({"name": "n"}, "k-1") == {"id": "d1"}
+    assert seen == ["k-1", "k-1"]
+
+
+@pytest.mark.parametrize("status", [429, 503])
+def test_patch_retry_reuses_idempotency_key(status):
+    keys = []
+
+    def handler(req):
+        if req.method == "GET":
+            return httpx.Response(200, json={"data": {"tags": [], "metadataRevision": 0}})
+        keys.append(req.headers["idempotency-key"])
+        if len(keys) == 1:
+            return httpx.Response(status, headers={"Retry-After": "1"})
+        return httpx.Response(200, json={"data": {}})
+
+    c, _ = client_with(handler)
+    c.patch_trace("t1", add_tags=["a"], idempotency_key="case-1")
+    assert len(keys) == 2 and keys[0] == keys[1]
+
+
+def test_persistent_429_stops_after_max_attempts():
+    calls = []
+
+    def handler(req):
+        calls.append(req)
+        return httpx.Response(429, headers={"Retry-After": "1"}, text="slow down")
+
+    c, sleeps = client_with(handler)
+    with pytest.raises(NeatlogsError) as e:
+        c.get_trace("t1")
+    assert e.value.status == 429 and len(calls) == c.max_attempts
+    assert len(sleeps) == c.max_attempts - 1
+
+
+def test_patch_409_exhausts_after_three_attempts():
+    patches = []
+
+    def handler(req):
+        if req.method == "GET":
+            return httpx.Response(200, json={"data": {"tags": [], "metadataRevision": len(patches)}})
+        patches.append(req)
+        return httpx.Response(409, json={"title": "conflict"})
+
+    c, sleeps = client_with(handler)
+    with pytest.raises(NeatlogsError) as e:
+        c.patch_trace("t1", add_tags=["a"], idempotency_key="k")
+    assert e.value.status == 409 and len(patches) == 3 and len(sleeps) == 2
+
+
+def test_paged_breaks_on_repeated_cursor():
+    calls = []
+
+    def handler(req):
+        calls.append(1)
+        return httpx.Response(200, json={"data": {"spans": [{"spanId": str(len(calls))}],
+                                                  "page": {"nextCursor": "same"}}})
+
+    c, _ = client_with(handler)
+    out = c.get_spans("t1")
+    assert len(calls) == 2 and len(out) == 2
