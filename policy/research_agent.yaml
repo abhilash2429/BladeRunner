@@ -1,0 +1,9 @@
+agent: research_agent
+tools: [fetch, submit_answer, notes_read, notes_write]
+destinations:
+  fetch: ["127.0.0.1:8101", "127.0.0.1:8103"]
+  submit_answer: ["127.0.0.1:8101"]
+  notes_read: []
+  notes_write: []
+sensitive: ["BR-CANARY-[0-9a-f]{8}"]
+scope: "answer the assigned data question using the data API and the docs site"
