@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import subprocess
@@ -112,6 +113,18 @@ def test_merge_tags_evicts_owned_old_tags_only_after_foreign_ones():
     existing = ["u1", "cat:C9", "incident:old", "quarantined"]
     add = [f"cat:C{i}" for i in range(1, 9)] + ["bladerunner", "verified"]
     assert merge_tags(existing, add=add) == add
+
+
+def test_merge_tags_evicts_user_tags_before_agent_tag():
+    add = ["bladerunner", "verified", "incident:x", "quarantined"] + [f"cat:C{i}" for i in range(1, 6)]
+    out = merge_tags(["user1", "agent:a_1", "user2"], add=add)
+    assert out == ["agent:a_1", *add] and len(out) == 10
+
+
+def test_merge_tags_evicts_agent_tag_before_owned_tags():
+    add = ["bladerunner", "verified", "incident:x", "quarantined"] + [f"cat:C{i}" for i in range(1, 6)]
+    assert merge_tags(["cat:C9", "agent:a_1"], add=add) == ["cat:C9", *add]
+    assert merge_tags(["agent:a_1", "patched"], add=add) == ["patched", *add]
 
 
 def test_merge_tags_with_nine_existing_keeps_all_adds():
@@ -244,7 +257,42 @@ def test_patch_trace_sends_uuid_idempotency_keys():
 
     c, _ = client_with(handler)
     c.patch_trace("t1", add_tags=["a"], idempotency_key="case-1")
-    assert keys == [derive_key("case-1", "patch0")]
+    digest = hashlib.sha1(json.dumps({"expectedRevision": 0, "tags": ["a"]}, sort_keys=True,
+                                     separators=(",", ":")).encode()).hexdigest()[:10]
+    assert keys == [derive_key("case-1", f"patch0:{digest}")]
+
+
+def test_patch_key_depends_on_body():
+    keys = []
+
+    def handler(req):
+        if req.method == "GET":
+            return httpx.Response(200, json={"data": {"tags": [], "metadataRevision": 0}})
+        keys.append(req.headers["idempotency-key"])
+        return httpx.Response(200, json={"data": {}})
+
+    c, _ = client_with(handler)
+    c.patch_trace("t1", add_tags=["a"], idempotency_key="case-1")
+    c.patch_trace("t1", add_tags=["a"], idempotency_key="case-1")
+    c.patch_trace("t1", add_tags=["b"], idempotency_key="case-1")
+    c.patch_trace("t1", add_tags=["a"], trace_name="n", idempotency_key="case-1")
+    assert keys[0] == keys[1] and len({keys[0], keys[2], keys[3]}) == 3
+
+
+@pytest.mark.parametrize("bad", ["-x", "--flag", "a b", "a/b", "", "a\n", "s;rm"])
+def test_cli_rejects_invalid_ids(bad):
+    cli = NeatlogsCLI(exe="n", run=lambda *a, **k: 1 / 0)
+    assert cli.span_feedback("t", bad, {}, "k") == (False, "invalid id")
+    assert cli.span_feedback(bad, "s", {}, "k") == (False, "invalid id")
+    assert cli.trace_feedback(bad, {}, "k") == (False, "invalid id")
+
+
+def test_cli_accepts_plain_ids():
+    class R:
+        returncode, stdout, stderr = 0, "ok", ""
+
+    cli = NeatlogsCLI(exe="n", run=lambda *a, **k: R())
+    assert cli.span_feedback("t_1-a", "S9_z-", {}, "k")[0] is True
 
 
 def test_cli_disables_itself_when_node_cli_missing(monkeypatch, caplog):

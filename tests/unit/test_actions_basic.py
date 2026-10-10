@@ -28,6 +28,15 @@ def test_control_error_on_non_json_success():
         c.confirm("r1", "a_1")
 
 
+def test_control_client_wraps_invalid_url():
+    class Bad:
+        def request(self, *a, **k):
+            raise httpx.InvalidURL("bad")
+
+    with pytest.raises(ControlError):
+        ControlClient(base="http://x", http=Bad()).stop("r1", "a_1")
+
+
 def test_tags_and_name():
     assert category_tags([UP, UP3, DOWN]) == ["cat:C1", "cat:C3"]
     assert trace_name("research_agent_1", [UP, UP3, DOWN]) == "[BLADERUNNER C1,C3] research_agent_1"
@@ -155,11 +164,26 @@ def test_tag_trims_highest_categories_when_adds_exceed_cap(st):
     assert Writeback(client, FakeCLI(), st).tag(case, seven, "verified", extra_add=["quarantined"]) is True
     add = client.calls[0][1]["add_tags"]
     assert add == ["bladerunner", "verified", f"incident:{case.case_id}", "quarantined",
-                   *[f"cat:C{i}" for i in range(1, 7)]]
+                   *[f"cat:C{i}" for i in range(1, 6)]]
     assert client.calls[0][1]["trace_name"] == "[BLADERUNNER C1,C2,C3,C4,C5,C6,C7] a_1"
+    assert "agent:a_1" in merge_tags(["agent:a_1"], add)
     tagged = [e for e in st.events(case.case_id) if e["kind"] == "writeback_tags"]
-    assert tagged[0]["data"]["trimmed"] == ["cat:C7"]
+    assert tagged[0]["data"]["trimmed"] == ["cat:C6", "cat:C7"]
     assert not any(e["kind"] == "writeback_failed" for e in st.events(case.case_id))
+
+
+def test_feedback_keys_depend_on_body(st):
+    case = open_case(st)
+    cli = FakeCLI()
+    wb = Writeback(FakeClient(), cli, st)
+    changed = Finding("C1", ["s2"], "different claim", 0.9, "upheld", "ok")
+    wb.feedback(case, [UP, UP3])
+    wb.feedback(case, [UP, UP3])
+    wb.feedback(case, [changed, UP3])
+    first, again, other = cli.calls[:3], cli.calls[3:6], cli.calls[6:9]
+    assert [c[3] for c in first] == [c[3] for c in again]
+    old, new = {c[1]: c[3] for c in first}, {c[1]: c[3] for c in other}
+    assert old["t1"] != new["t1"] and old["s2"] != new["s2"] and old["s1"] == new["s1"]
 
 
 def test_tag_event_has_no_trimmed_key_when_everything_fits(st):
@@ -198,7 +222,8 @@ def test_reporter_neutralizes_hostile_text(st, tmp_path, monkeypatch):
     case = open_case(st, agent="agent\n# pwn")
     evil_span = "s]) [evil](http://evil)"
     hostile = Finding("C1", [evil_span],
-                      "line1\n| fake | row |\n![x](http://evil/) <script>alert(1)</script> a\u2014b",
+                      "line1\n| fake | row |\n![x](http://evil/) <script>alert(1)</script> a\u2014b "
+                      "http://evil3.example www.evil4.example x\u202ey\u200bz\x07w",
                       0.9, "upheld", "reason\r\n## heading `code` *bold*")
     st.set_findings(case.case_id, [hostile.__dict__])
     why = "a\n```\n# injected\n```\nb"
@@ -213,8 +238,38 @@ def test_reporter_neutralizes_hostile_text(st, tmp_path, monkeypatch):
     assert "](http://evil" not in text and "](http://evil2" not in text
     assert "span=s%5D%29%20%5Bevil%5D%28http%3A%2F%2Fevil%29" in text
     assert "\n## heading" not in text and "\n# pwn" not in text
+    assert "http://evil3" not in text and "www.evil4" not in text
+    assert "http:/&#47;evil3.example" in text and "www&#46;evil4.example" in text
+    assert not any(c in text for c in "\u202e\u200b\x07")
+    assert "xyzw" in text
     assert "\u2014" not in text
     assert "````\na\n```\n# injected\n```\nb\n````" in text
+
+
+def test_report_confirm_is_allowlisted(st, tmp_path, monkeypatch):
+    monkeypatch.setenv("NEATLOGS_TRACE_URL", "https://app.example/traces/{trace_id}")
+    case = open_case(st)
+    st.set_findings(case.case_id, [UP.__dict__])
+    st.set_extra(case.case_id, confirm={"rerun_clean": True, "control_clean": False, "watchdog_clean": True,
+                                        "rerun_ids": ["r9"], "leak": "CONFIRMSECRET"})
+    md, js = Reporter(st, tmp_path / "incidents")(case.case_id)
+    raw = js.read_text(encoding="utf-8")
+    assert "CONFIRMSECRET" not in md.read_text(encoding="utf-8") and "CONFIRMSECRET" not in raw
+    assert json.loads(raw)["case"]["extra"]["confirm"] == {"rerun_clean": True, "control_clean": False,
+                                                           "watchdog_clean": True}
+
+
+def test_json_report_keeps_raw_finding_text_capped(st, tmp_path, monkeypatch):
+    monkeypatch.setenv("NEATLOGS_TRACE_URL", "https://app.example/traces/{trace_id}")
+    case = open_case(st)
+    long = Finding("C1", ["s2"], "a|b *x* [y](z) " + "q" * 1500, 0.9, "upheld", "r_1 <b>")
+    st.set_findings(case.case_id, [{**long.__dict__, "internal": "NOPE"}])
+    md, js = Reporter(st, tmp_path / "incidents")(case.case_id)
+    f = json.loads(js.read_text(encoding="utf-8"))["findings"][0]
+    assert f["claim"] == ("a|b *x* [y](z) " + "q" * 1500)[:1000] and len(f["claim"]) == 1000
+    assert f["reason"] == "r_1 <b>" and f["category"] == "C1" and f["evidence_span_ids"] == ["s2"]
+    assert "internal" not in f
+    assert "\\*x\\*" in md.read_text(encoding="utf-8")
 
 
 def test_urls_encode_ids_and_do_not_format_template(monkeypatch):

@@ -32,3 +32,16 @@ def test_control_client_only_touches_watchdog_routes():
         ("POST", "/runs/r1/confirm", body),
         ("GET", "/confirm/j1", None),
     ]
+
+
+def test_control_client_quotes_hostile_ids():
+    raw = []
+
+    def handler(req):
+        raw.append((req.method, req.url.raw_path.decode()))
+        return httpx.Response(200, json={"ok": True})
+
+    c = ControlClient(base="http://127.0.0.1:8100", http=httpx.Client(transport=httpx.MockTransport(handler)))
+    c.pause("r/../x?y", "a_1")
+    c.confirm_status("j/../../z#f")
+    assert raw == [("POST", "/runs/r%2F..%2Fx%3Fy/pause"), ("GET", "/confirm/j%2F..%2F..%2Fz%23f")]

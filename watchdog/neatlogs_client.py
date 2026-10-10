@@ -6,6 +6,7 @@ import logging
 import math
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -49,7 +50,9 @@ def merge_tags(existing, add=(), remove=(), cap: int = 10) -> list[str]:
     need = len(out) - cap
     if need > 0:
         evictable = [t for t in base if t not in adds]
-        victims = ([t for t in evictable if not _owned(t)] + [t for t in evictable if _owned(t)])[:need]
+        agent = [t for t in evictable if t.startswith("agent:")]
+        victims = ([t for t in evictable if not _owned(t) and t not in agent] + agent
+                   + [t for t in evictable if _owned(t)])[:need]
         out = [t for t in out if t not in victims]
     return out[:cap]
 
@@ -190,9 +193,10 @@ class NeatlogsClient:
                           "tags": merge_tags(trace.get("tags") or [], add_tags, remove_tags)}
             if trace_name:
                 body["traceName"] = trace_name[:255]
+            digest = hashlib.sha1(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:10]
             try:
                 return _data(self.request("PATCH", f"/traces/{trace_id}", json_body=body,
-                                          idempotency_key=derive_key(idempotency_key, f"patch{attempt}")))
+                                          idempotency_key=derive_key(idempotency_key, f"patch{attempt}:{digest}")))
             except NeatlogsError as e:
                 if e.status != 409 or attempt == 2:
                     raise
@@ -213,6 +217,10 @@ def _node_cli_path() -> str:
     keep = [p for p in os.environ.get("PATH", "").split(os.pathsep)
             if p and os.path.normcase(os.path.normpath(p)) not in venv]
     return os.pathsep.join(keep)
+
+
+def _valid_id(value) -> bool:
+    return isinstance(value, str) and not value.startswith("-") and re.fullmatch(r"[A-Za-z0-9_-]+", value) is not None
 
 
 class NeatlogsCLI:
@@ -244,9 +252,13 @@ class NeatlogsCLI:
         return False, (r.stderr or r.stdout or "")[-500:]
 
     def trace_feedback(self, trace_id: str, body: dict, idempotency_key: str) -> tuple[bool, str]:
+        if not _valid_id(trace_id):
+            return False, "invalid id"
         return self._call(["feedback", "create", "--trace", trace_id, "--body-stdin",
                            "--idempotency-key", idempotency_key], body)
 
     def span_feedback(self, trace_id: str, span_id: str, body: dict, idempotency_key: str) -> tuple[bool, str]:
+        if not (_valid_id(trace_id) and _valid_id(span_id)):
+            return False, "invalid id"
         return self._call(["feedback", "span-set", span_id, "--trace", trace_id, "--body-stdin",
                            "--idempotency-key", idempotency_key], body)

@@ -15,7 +15,11 @@ CELL_LIMIT = 500
 WHY_LIMIT = 4000
 EVENT_KEYS = ("to", "from", "ok", "span_id", "status", "categories")
 EVIDENCE_KEYS = ("rule_id", "span_id", "kind")
+FINDING_KEYS = ("category", "claim", "reason", "verdict", "confidence")
+JSON_TEXT_LIMIT = 1000
+CONFIRM_KEYS = ("rerun_clean", "control_clean", "watchdog_clean")
 _ESCAPE = re.compile(r"([\\`*_\[\]<>!()])")
+_STRIP = re.compile("[\x00-\x08\x0b-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069]")
 
 TEMPLATE = """# Incident {{ case.case_id | md_cell }}: {{ title | md_cell }}
 
@@ -71,6 +75,7 @@ Not confirmed yet.
 def md_cell(value, limit: int = CELL_LIMIT) -> str:
     text = "" if value is None else str(value)
     text = re.sub(r"[\r\n]+", " ", text).replace("\u2014", ", ").replace("|", "/")
+    text = _STRIP.sub("", text).replace("://", ":/&#47;").replace("www.", "www&#46;")
     if len(text) > limit:
         text = text[: limit - 3] + "..."
     return _ESCAPE.sub(r"\\\1", text)
@@ -111,11 +116,11 @@ def _safe_evidence(evidence: list[dict]) -> list[dict]:
 
 
 def _safe_finding(f: dict) -> dict:
-    out = dict(f)
+    out = {k: f[k] for k in FINDING_KEYS if k in f}
     for k in ("category", "claim", "reason", "verdict"):
         if out.get(k) is not None:
-            out[k] = md_cell(out[k])
-    out["evidence_span_ids"] = [str(s) for s in out.get("evidence_span_ids", [])]
+            out[k] = str(out[k])[:JSON_TEXT_LIMIT]
+    out["evidence_span_ids"] = [str(s) for s in f.get("evidence_span_ids", [])]
     return out
 
 
@@ -126,7 +131,7 @@ def _safe_extra(extra: dict) -> dict:
         out["patch"] = {k: (md_cell(patch[k]) if k == "reason" else patch[k])
                         for k in ("ok", "sha", "checkpoint", "paths", "attempts", "reason") if k in patch}
     if isinstance(extra.get("confirm"), dict):
-        out["confirm"] = extra["confirm"]
+        out["confirm"] = {k: extra["confirm"][k] for k in CONFIRM_KEYS if k in extra["confirm"]}
     return out
 
 

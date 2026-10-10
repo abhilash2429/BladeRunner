@@ -27,6 +27,10 @@ def _payload_digest(add: list[str], remove: tuple, name: str) -> str:
     return hashlib.sha1(blob.encode()).hexdigest()[:10]
 
 
+def _body_digest(body: dict) -> str:
+    return hashlib.sha1(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:10]
+
+
 class Writeback:
     def __init__(self, client, cli, state):
         self.client = client
@@ -42,7 +46,7 @@ class Writeback:
         if len(own) > TAG_CAP:
             return self._tag_failed(case, "TooManyTags")
         cats = [t for t in category_tags(findings) if t not in own]
-        room = TAG_CAP - len(own)
+        room = TAG_CAP - len(own) - 1
         add, trimmed = own + cats[:room], cats[room:]
         remove = tuple(remove)
         name = trace_name(case.agent, findings)
@@ -82,15 +86,16 @@ class Writeback:
         body = {"rating": -100, "comment": f"Bladerunner incident {case.case_id}. {summary}",
                 "issueTypes": sorted({f.category for f in ups})}
         all_ok = self._feedback_call(case, "trace", None, lambda: self.cli.trace_feedback(
-            case.trace_id, body, derive_key(case.idem_key, "feedback")))
+            case.trace_id, body, derive_key(case.idem_key, f"feedback:{_body_digest(body)}")))
         notes: dict[str, list[str]] = {}
         for f in ups:
             for span_id in f.evidence_span_ids:
                 notes.setdefault(span_id, []).append(f"{f.category}: {f.claim}")
         for span_id, parts in notes.items():
             note = "; ".join(dict.fromkeys(parts))[:2000]
+            span_body = {"vote": "down", "note": note}
             ok = self._feedback_call(case, "span", span_id, lambda: self.cli.span_feedback(
-                case.trace_id, span_id, {"vote": "down", "note": note},
-                derive_key(case.idem_key, f"span:{span_id}")))
+                case.trace_id, span_id, span_body,
+                derive_key(case.idem_key, f"span:{span_id}:{_body_digest(span_body)}")))
             all_ok = ok and all_ok
         return all_ok

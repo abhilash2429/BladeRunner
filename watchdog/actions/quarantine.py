@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
 import httpx
 
 from common.config import host
@@ -17,7 +19,7 @@ class ControlClient:
     def _send(self, method: str, path: str, body: dict | None = None) -> dict:
         try:
             r = self.http.request(method, self.base + path, json=body)
-        except httpx.HTTPError as e:
+        except (httpx.HTTPError, httpx.InvalidURL) as e:
             raise ControlError(f"{method} {path}: {type(e).__name__}") from e
         if r.status_code >= 400:
             raise ControlError(f"{method} {path}: {r.status_code}")
@@ -27,16 +29,16 @@ class ControlClient:
             raise ControlError(f"{method} {path}: non-JSON response") from e
 
     def pause(self, run_id: str, agent: str) -> None:
-        self._send("POST", f"/runs/{run_id}/pause", {"agent": agent})
+        self._send("POST", f"/runs/{quote(run_id, safe='')}/pause", {"agent": agent})
 
     def stop(self, run_id: str, agent: str) -> None:
-        self._send("POST", f"/runs/{run_id}/stop", {"agent": agent})
+        self._send("POST", f"/runs/{quote(run_id, safe='')}/stop", {"agent": agent})
 
     def resume(self, run_id: str, agent: str) -> None:
-        self._send("POST", f"/runs/{run_id}/resume", {"agent": agent})
+        self._send("POST", f"/runs/{quote(run_id, safe='')}/resume", {"agent": agent})
 
     def confirm(self, run_id: str, agent: str) -> dict:
-        return self._send("POST", f"/runs/{run_id}/confirm", {"agent": agent})
+        return self._send("POST", f"/runs/{quote(run_id, safe='')}/confirm", {"agent": agent})
 
     def confirm_status(self, job_id: str) -> dict:
-        return self._send("GET", f"/confirm/{job_id}")
+        return self._send("GET", f"/confirm/{quote(job_id, safe='')}")
