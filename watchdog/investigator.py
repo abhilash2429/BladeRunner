@@ -263,6 +263,10 @@ class Investigator:
                                      "content": "error: arguments were not a valid JSON object; retry"})
                     continue
                 if tc.function.name == "submit_findings":
+                    if not isinstance(args.get("findings"), list):
+                        messages.append({"role": "tool", "tool_call_id": tc.id,
+                                         "content": "error: findings must be a list; retry"})
+                        continue
                     return self._parse(args, known)
                 if over_budget:
                     result = "error: tool budget exhausted"

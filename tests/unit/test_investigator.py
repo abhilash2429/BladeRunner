@@ -311,3 +311,33 @@ def test_ledger_records_every_call(scripted_llm, fake_response, tmp_path):
 def test_finding_defaults():
     f = Finding("C1", ["s1"], "x", 0.5)
     assert f.verdict is None and f.reason is None
+
+
+@pytest.mark.parametrize("args", [{}, {"findings": "abc"}, {"findings": {"category": "C1"}}, {"findings": None}])
+def test_submit_without_a_findings_list_is_retried_then_raises(scripted_llm, fake_response, args):
+    llm = scripted_llm([fake_response(("submit_findings", args)), fake_response(("submit_findings", args))])
+    with pytest.raises(InvestigationError):
+        run(llm, max_calls=0)
+    assert len(llm.requests) == 2
+    assert llm.requests[1]["messages"][-1]["content"].startswith("error")
+
+
+def test_submit_without_a_findings_list_can_recover(scripted_llm, fake_response):
+    llm = scripted_llm([fake_response(("submit_findings", {})), fake_response(("submit_findings", submit([])))])
+    assert run(llm, max_calls=0) == []
+    assert len(llm.requests) == 2
+
+
+class MissingSiblingSource(FakeSource):
+    def spans(self, trace_id):
+        if trace_id == "t2":
+            raise NeatlogsError(404, "trace not found")
+        return super().spans(trace_id)
+
+
+def test_missing_sibling_tree_goes_back_to_the_model(scripted_llm, fake_response):
+    llm = scripted_llm([fake_response(("get_span_tree", {"trace_id": "t2"})),
+                        fake_response(("submit_findings", submit([])))])
+    inv = Investigator(llm, "kimi", MissingSiblingSource(), policy_text_for=lambda role: "p")
+    assert inv.investigate(trace_id="t1", session_id="r1", agent="research_agent_1", hits=[]) == []
+    assert llm.requests[1]["messages"][-1]["content"] == "error: trace t2 was not found"
