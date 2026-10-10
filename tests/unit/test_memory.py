@@ -16,6 +16,13 @@ def test_filter_hits_keeps_only_incident_material():
     assert [i["text"] for i in filter_hits(items)] == ["incident", "fact"]
 
 
+def test_filter_hits_keeps_facts_remembered_under_project_incidents():
+    items = [{"path": "project.incidents.c1", "text": "remembered"},
+             {"path": "project.architecture.notes", "text": "unrelated fact"},
+             {"path": "project.incidentsx.c1", "text": "lookalike"}]
+    assert [i["text"] for i in filter_hits(items)] == ["remembered"]
+
+
 def test_items_from_result_parses_json_and_text():
     result = SimpleNamespace(content=[SimpleNamespace(text=json.dumps({"results": [{"path": "docs/incidents/a.md"}]})),
                                       SimpleNamespace(text="plain text")])

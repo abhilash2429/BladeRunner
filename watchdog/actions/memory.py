@@ -10,6 +10,7 @@ import anyio
 from common.config import REPO_ROOT, tool_env
 
 INCIDENT_MARKERS = ("docs/incidents/",)
+FACT_PREFIXES = ("incidents.", "project.incidents.")
 _REF_KEYS = ("path", "source", "id", "file", "uri")
 _MCP_TIMEOUT_S = 20
 _CLI_TIMEOUT_S = 60
@@ -19,7 +20,7 @@ def filter_hits(items: list[dict]) -> list[dict]:
     keep = []
     for item in items:
         refs = [str(item.get(k, "")) for k in _REF_KEYS]
-        if any(m in r for r in refs for m in INCIDENT_MARKERS) or any(r.startswith("incidents.") for r in refs):
+        if any(m in r for r in refs for m in INCIDENT_MARKERS) or any(r.startswith(FACT_PREFIXES) for r in refs):
             keep.append(item)
     return keep
 
