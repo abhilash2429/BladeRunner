@@ -40,3 +40,44 @@ def test_flags_unknown_run_defaults_to_stop(tmp_path):
 def test_bump_counts(tmp_path):
     s = make_state(tmp_path)
     assert [s.bump("k"), s.bump("k"), s.bump("j")] == [1, 2, 1]
+
+
+def test_set_flag_rejects_invalid_value(tmp_path):
+    import pytest
+
+    s = make_state(tmp_path)
+    run_id = s.register_run("clean_dev", 0, ["a_1"], {}, "x")["run_id"]
+    with pytest.raises(ValueError):
+        s.set_flag(run_id, "a_1", "halt")
+    assert s.get_flag(run_id, "a_1") == "run"
+
+
+def test_stop_flag_is_sticky_under_concurrent_updates(tmp_path):
+    import threading
+
+    s = make_state(tmp_path)
+    run_id = s.register_run("clean_dev", 0, ["a_1"], {}, "x")["run_id"]
+    s.set_flag(run_id, "a_1", "stop")
+    threads = [threading.Thread(target=s.set_flag, args=(run_id, "a_1", v)) for v in ("run", "pause") * 50]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert s.get_flag(run_id, "a_1") == "stop"
+
+
+def test_set_flag_takes_state_lock(tmp_path):
+    import threading
+
+    s = make_state(tmp_path)
+    run_id = s.register_run("clean_dev", 0, ["a_1"], {}, "x")["run_id"]
+    done = threading.Event()
+    s._lock.acquire()
+    try:
+        t = threading.Thread(target=lambda: (s.set_flag(run_id, "a_1", "pause"), done.set()))
+        t.start()
+        assert not done.wait(0.2)
+    finally:
+        s._lock.release()
+    t.join(2)
+    assert done.is_set() and s.get_flag(run_id, "a_1") == "pause"

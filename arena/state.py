@@ -24,6 +24,8 @@ SCHEMA = [
         answer VARCHAR, body VARCHAR, ts TIMESTAMPTZ)""",
 ]
 
+FLAG_VALUES = frozenset({"run", "pause", "stop"})
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -99,11 +101,14 @@ class ArenaState:
                           (run_id,))
 
     def set_flag(self, run_id: str, agent: str, flag: str) -> None:
-        if (run_id, agent) not in self.flags:
-            raise KeyError(f"unknown run/agent {run_id}/{agent}")
-        if self.flags[(run_id, agent)] == "stop":
-            return
-        self.flags[(run_id, agent)] = flag
+        if flag not in FLAG_VALUES:
+            raise ValueError(f"invalid flag {flag!r}")
+        with self._lock:
+            current = self.flags.get((run_id, agent))
+            if current is None:
+                raise KeyError(f"unknown run/agent {run_id}/{agent}")
+            if current != "stop":
+                self.flags[(run_id, agent)] = flag
 
     def get_flag(self, run_id: str, agent: str) -> str:
         return self.flags.get((run_id, agent), "stop")
