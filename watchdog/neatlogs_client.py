@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import math
 import os
 import random
 import shutil
@@ -39,21 +41,36 @@ def merge_tags(existing, add=(), remove=(), cap: int = 10) -> list[str]:
     return out[:cap]
 
 
+MAX_HEADER_DELAY = 60.0
+
+log = logging.getLogger(__name__)
+
+
+def _valid_delay(value: float) -> float | None:
+    if math.isfinite(value) and value >= 0:
+        return min(value, MAX_HEADER_DELAY)
+    return None
+
+
 def retry_delay(headers, attempt: int, now: float | None = None) -> float:
     now = time.time() if now is None else now
     retry_after = headers.get("retry-after")
     if retry_after:
         try:
-            return max(0.0, float(retry_after))
+            delay = _valid_delay(float(retry_after))
         except ValueError:
-            pass
+            delay = None
+        if delay is not None:
+            return delay
     reset = headers.get("ratelimit-reset")
     if reset:
         try:
             value = float(reset)
-            return max(0.0, value - now) if value > 1e9 else max(0.0, value)
+            delay = _valid_delay(value - now if value > 1e9 else value)
         except ValueError:
-            pass
+            delay = None
+        if delay is not None:
+            return delay
     return min(30.0, 2.0 ** attempt) + random.uniform(0, 0.5)
 
 
@@ -108,12 +125,14 @@ class NeatlogsClient:
     def _paged(self, path: str, key: str, params: dict) -> list[dict]:
         out: list[dict] = []
         params = dict(params)
+        seen: set[str] = set()
         while True:
             data = _data(self.request("GET", path, params=params))
             out.extend(data.get(key, []))
             cursor = (data.get("page") or {}).get("nextCursor")
-            if not cursor:
+            if not cursor or cursor in seen:
                 return out
+            seen.add(cursor)
             params["cursor"] = cursor
 
     def list_traces(self, *, since: datetime, until: datetime | None = None, workflow_name: str | None = None,
@@ -185,23 +204,31 @@ def _node_cli_path() -> str:
 
 class NeatlogsCLI:
     def __init__(self, exe: str | None = None, run=subprocess.run, enabled: bool = True):
-        self.exe = exe or shutil.which("neatlogs", path=_node_cli_path()) or "neatlogs"
+        self.exe = exe or shutil.which("neatlogs", path=_node_cli_path())
         self.run = run
-        self.enabled = enabled
+        self.enabled = enabled and self.exe is not None
+        if enabled and self.exe is None:
+            log.warning("neatlogs Node CLI not found outside the venv; CLI feedback disabled")
 
     def env(self) -> dict:
         keep = ("NEATLOGS_HOST", "NEATLOGS_PROJECT_ID")
         e = {k: v for k, v in os.environ.items() if not k.startswith("NEATLOGS_") or k in keep}
         e["NEATLOGS_HOST"] = os.environ.get("NEATLOGS_HOST", "https://app.neatlogs.com")
-        e["NEATLOGS_PROJECT_ID"] = os.environ.get("NEATLOGS_PROJECT_ID", "")
+        if "NEATLOGS_PROJECT_ID" not in os.environ:
+            e.pop("NEATLOGS_PROJECT_ID", None)
         return e
 
     def _call(self, args: list[str], body: dict) -> tuple[bool, str]:
         if not self.enabled:
             return False, "disabled"
-        r = self.run([self.exe, *args, "--json"], input=json.dumps(body), text=True, capture_output=True,
-                     env=self.env(), timeout=60)
-        return r.returncode == 0, (r.stdout or r.stderr or "")[-500:]
+        try:
+            r = self.run([self.exe, *args, "--json"], input=json.dumps(body), text=True, capture_output=True,
+                         env=self.env(), timeout=60)
+        except subprocess.TimeoutExpired:
+            return False, "timeout"
+        if r.returncode == 0:
+            return True, (r.stdout or r.stderr or "")[-500:]
+        return False, (r.stderr or r.stdout or "")[-500:]
 
     def trace_feedback(self, trace_id: str, body: dict, idempotency_key: str) -> tuple[bool, str]:
         return self._call(["feedback", "create", "--trace", trace_id, "--body-stdin",

@@ -291,7 +291,7 @@ def test_retry_delay_clamps_and_rejects_bad_values():
     assert retry_delay({"ratelimit-reset": "9999999999"}, 0, now=1000000000.0) == 60.0
     for bad in ("inf", "nan", "-5"):
         assert 1.0 <= retry_delay({"retry-after": bad}, 0) <= 1.5
-    assert 1.0 <= retry_delay({"ratelimit-reset": "1000000000"}, 0, now=1000000500.0) <= 1.5
+    assert 1.0 <= retry_delay({"ratelimit-reset": "1000000100"}, 0, now=1000000500.0) <= 1.5
 
 
 @pytest.mark.parametrize("status", [429, 503])
