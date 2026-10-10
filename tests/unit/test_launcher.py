@@ -57,3 +57,46 @@ def test_kill_all_terminates_live_process_trees(tmp_path):
     assert not t.is_alive() and result[0] != 0
     time.sleep(0.5)
     assert not pid_alive(grandchild)
+
+
+def test_run_after_kill_all_refuses_to_spawn(tmp_path):
+    spawned = []
+
+    def command(run_id, agents):
+        spawned.append(run_id)
+        return [sys.executable, "-c", "pass"]
+
+    launcher = Launcher(timeout=10, log_dir=tmp_path, command=command)
+    launcher.kill_all()
+    assert launcher.run("r4", ["a_1"]) == -1
+    assert spawned == [] and not (tmp_path / "r4.log").exists()
+
+
+def test_kill_all_is_reentrant_with_the_live_lock(tmp_path):
+    import threading
+
+    launcher = Launcher(timeout=10, log_dir=tmp_path)
+    done = threading.Event()
+
+    def reenter():
+        with launcher._live_lock:
+            launcher.kill_all()
+        done.set()
+
+    threading.Thread(target=reenter, daemon=True).start()
+    assert done.wait(5)
+
+
+def test_kill_tree_is_bounded_when_process_will_not_die(caplog):
+    import subprocess
+    from types import SimpleNamespace
+
+    from arena.launcher import _kill_tree
+
+    def never_exits(timeout=None):
+        raise subprocess.TimeoutExpired("x", timeout)
+
+    started = time.monotonic()
+    _kill_tree(SimpleNamespace(pid=999999, wait=never_exits))
+    assert time.monotonic() - started < 30
+    assert any("did not exit" in r.getMessage() for r in caplog.records)
