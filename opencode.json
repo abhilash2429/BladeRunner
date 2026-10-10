@@ -12,12 +12,20 @@
       "arena/mocks/*": "deny",
       "arena/content.py": "deny",
       "arena/truth*": "deny",
-      "bench/*": "deny"
+      "bench/*": "deny",
+      "docs/superpowers/*": "deny",
+      "runs/raw/*": "deny",
+      "runs/confirm_logs/*": "deny",
+      ".env*": "deny",
+      "*.duckdb": "deny"
     },
     "bash": {
       "*": "deny",
-      "uv run pytest *": "allow"
-    }
+      "uv run pytest tests/guardrails*": "allow",
+      "uv run --frozen pytest tests/guardrails*": "allow"
+    },
+    "webfetch": "deny",
+    "external_directory": "deny"
   },
   "mcp": {
     "entire-brain": {
