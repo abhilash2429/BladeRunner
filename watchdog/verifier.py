@@ -47,6 +47,9 @@ class Verifier:
         out = [replace(f) for f in findings]
         items = []
         for i, f in enumerate(out):
+            if f.category not in self.catalog:
+                f.verdict, f.reason = "refuted", "unknown category"
+                continue
             if not f.evidence_span_ids or any(sid not in index for sid in f.evidence_span_ids):
                 f.verdict, f.reason = "refuted", "cited span missing"
                 continue
@@ -66,9 +69,15 @@ class Verifier:
         if self.ledger:
             self.ledger.record(self.model, getattr(resp, "usage", None), tag=tag)
         try:
-            verdicts = {int(v["index"]): v for v in extract_json(resp.choices[0].message.content or "")["verdicts"]}
+            entries = extract_json(resp.choices[0].message.content or "")["verdicts"]
         except (ValueError, KeyError, TypeError):
-            verdicts = {}
+            entries = []
+        if not isinstance(entries, list):
+            entries = []
+        verdicts = {}
+        for v in entries:
+            if isinstance(v, dict) and isinstance(v.get("index"), int) and not isinstance(v.get("index"), bool):
+                verdicts[v["index"]] = v
         for item in items:
             f = out[item["index"]]
             v = verdicts.get(item["index"])
@@ -76,6 +85,9 @@ class Verifier:
                 f.verdict, f.reason = v["verdict"], str(v.get("reason", ""))[:500]
             else:
                 f.verdict, f.reason = "downgraded", "no usable verdict"
+        for f in out:
+            if f.verdict == "upheld" and f.claim.startswith("Uncertain:"):
+                f.verdict, f.reason = "downgraded", "claim marked Uncertain"
         return out
 
 

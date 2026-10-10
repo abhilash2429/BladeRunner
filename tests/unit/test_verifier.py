@@ -54,3 +54,66 @@ def test_decide():
     assert decide([up, ref]) == "verified"
     assert decide([down, ref]) == "needs_review"
     assert decide([ref]) == "dismissed" and decide([]) == "dismissed"
+
+
+def test_uncertain_claim_never_stays_upheld(scripted_llm, fake_response):
+    reply = json.dumps({"verdicts": [{"index": 0, "verdict": "upheld", "reason": "looks right"}]})
+    llm = scripted_llm([fake_response(content=reply)])
+    out = Verifier(llm, "m", FakeSource()).verify(
+        trace_id="t1", session_id=None,
+        findings=[Finding("C1", ["s2"], "Uncertain: maybe wrote notes", 0.5)])
+    assert out[0].verdict == "downgraded"
+    assert out[0].reason == "claim marked Uncertain"
+
+
+def test_bad_verdict_entries_do_not_discard_good_ones(scripted_llm, fake_response):
+    reply = json.dumps({"verdicts": ["junk",
+                                     {"index": True, "verdict": "refuted", "reason": "bool index"},
+                                     {"index": "1", "verdict": "refuted", "reason": "string index"},
+                                     {"index": 0, "verdict": "upheld", "reason": "s2 writes"}]})
+    llm = scripted_llm([fake_response(content=reply)])
+    findings = [Finding("C1", ["s2"], "notes write", 0.9), Finding("C1", ["s2"], "second", 0.4)]
+    out = Verifier(llm, "m", FakeSource()).verify(trace_id="t1", session_id=None, findings=findings)
+    assert [f.verdict for f in out] == ["upheld", "downgraded"]
+    assert out[1].reason == "no usable verdict"
+
+
+def test_unknown_category_refuted_without_call(scripted_llm):
+    llm = scripted_llm([])
+    out = Verifier(llm, "m", FakeSource()).verify(trace_id="t1", session_id=None,
+                                                  findings=[Finding("C99", ["s2"], "x", 0.9)])
+    assert out[0].verdict == "refuted"
+    assert out[0].reason == "unknown category"
+    assert llm.requests == []
+
+
+def test_all_findings_prerefuted_no_call(scripted_llm):
+    llm = scripted_llm([])
+    out = Verifier(llm, "m", FakeSource()).verify(
+        trace_id="t1", session_id=None,
+        findings=[Finding("C1", ["s404"], "x", 0.9), Finding("C99", ["s2"], "y", 0.9)])
+    assert [f.verdict for f in out] == ["refuted", "refuted"]
+    assert llm.requests == []
+
+
+def test_evidence_truncated_to_3000_chars(scripted_llm, fake_response):
+    class LongSource(FakeSource):
+        def payload(self, trace_id, span_id):
+            return {"input": "a" * 5000, "output": "b" * 3000 + "c"}
+
+    reply = json.dumps({"verdicts": [{"index": 0, "verdict": "upheld", "reason": "ok"}]})
+    llm = scripted_llm([fake_response(content=reply)])
+    Verifier(llm, "m", LongSource()).verify(trace_id="t1", session_id=None,
+                                            findings=[Finding("C1", ["s2"], "x", 0.9)])
+    ev = json.loads(llm.requests[0]["messages"][1]["content"])["findings"][0]["evidence"]["s2"]
+    assert ev["input"] == "a" * 3000
+    assert ev["output"] == "b" * 3000
+
+
+def test_invalid_verdict_string_downgraded(scripted_llm, fake_response):
+    reply = json.dumps({"verdicts": [{"index": 0, "verdict": "maybe", "reason": "hm"}]})
+    llm = scripted_llm([fake_response(content=reply)])
+    out = Verifier(llm, "m", FakeSource()).verify(trace_id="t1", session_id=None,
+                                                  findings=[Finding("C1", ["s2"], "x", 0.9)])
+    assert out[0].verdict == "downgraded"
+    assert out[0].reason == "no usable verdict"
