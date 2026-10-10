@@ -1,0 +1,47 @@
+{
+  "data": {
+    "page": {
+      "hasMore": false,
+      "limit": 50,
+      "nextCursor": null
+    },
+    "spans": [
+      {
+        "completionTokens": 0,
+        "costUsd": 0,
+        "durationMs": 1,
+        "endedAt": "2026-10-10T17:49:02.028Z",
+        "model": null,
+        "parentSpanId": "bc7352ac3273e8b6",
+        "promptTokens": 0,
+        "provider": null,
+        "spanId": "764f786301a4337c",
+        "spanName": "day1_notes_write",
+        "spanType": "TOOL",
+        "startedAt": "2026-10-10T17:49:02.027Z",
+        "status": "OK",
+        "totalTokens": 0,
+        "traceId": "7145211d828457d95244c250986222af"
+      },
+      {
+        "completionTokens": 0,
+        "costUsd": 0,
+        "durationMs": 23,
+        "endedAt": "2026-10-10T17:49:02.050Z",
+        "model": null,
+        "parentSpanId": null,
+        "promptTokens": 0,
+        "provider": null,
+        "spanId": "bc7352ac3273e8b6",
+        "spanName": "day1-detection",
+        "spanType": "WORKFLOW",
+        "startedAt": "2026-10-10T17:49:02.027Z",
+        "status": "OK",
+        "totalTokens": 0,
+        "traceId": "7145211d828457d95244c250986222af"
+      }
+    ]
+  },
+  "requestId": "req_4c130805bcdbd5ef56727450104e3bfb",
+  "success": true
+}

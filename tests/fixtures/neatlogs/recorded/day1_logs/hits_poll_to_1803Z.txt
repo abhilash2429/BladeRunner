@@ -1,0 +1,2 @@
+done, remaining: ['regex', 'conditional']
+polled both detections every 15s from 17:53Z; emit of trace 7145211d at 17:49Z; started polling at 17:53:00Z

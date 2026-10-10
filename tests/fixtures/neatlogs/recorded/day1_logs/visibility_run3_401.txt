@@ -1,0 +1,5 @@
+Failed to export spans batch code: 401, reason: Unauthorized
+Failed to export spans batch code: 401, reason: Unauthorized
+2026-10-10 23:36:36 - neatlogs - INFO - Neatlogs SDK shutdown complete
+TRACE_ID None
+18:06Z MCP initialize POST with the .env ingest key: HTTP 401 application/json {"error":"Invalid API key"} (console only)

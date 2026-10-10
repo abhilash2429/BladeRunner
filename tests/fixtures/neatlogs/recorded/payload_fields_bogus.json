@@ -1,0 +1,17 @@
+{
+  "code": "VALIDATION_ERROR",
+  "detail": "The public API request is invalid.",
+  "errors": [
+    {
+      "code": "invalid_value",
+      "message": "Invalid value.",
+      "path": "fields"
+    }
+  ],
+  "instance": "/api/v1/public/traces/25881a8c1ca64f97bda35464386de3ba/spans/bc89bfb07efed2de/payload",
+  "requestId": "req_31c0e321437cd2f82847d3cf06845616",
+  "retryable": false,
+  "status": 400,
+  "title": "Bad Request",
+  "type": "urn:neatlogs:problem:validation-error"
+}

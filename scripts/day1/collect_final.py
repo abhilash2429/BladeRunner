@@ -24,10 +24,12 @@ with _rest.client() as c:
     print("span keys:", [list(s.keys()) for s in items][:1])
     for s in items:
         sid = s.get("spanId") or s.get("id")
-        if "day1_notes_write" in str(s.get("name")):
-            payload = c.get(f"/traces/{trace_id}/spans/{sid}/payload", params={"fields": "input,output"})
-            print("payload:", payload.status_code, payload.text[:400])
-            _rest.save("payload", payload.json())
+        if s.get("spanName") == "day1_notes_write":
+            for label, params in (("fields_in_out", {"fields": "input,output"}), ("fields_input", {"fields": "input"}),
+                                  ("no_fields", {}), ("fields_bogus", {"fields": "bogus"})):
+                payload = c.get(f"/traces/{trace_id}/spans/{sid}/payload", params=params)
+                print("payload", label, payload.status_code, payload.text[:500])
+                _rest.save("payload" if label == "fields_in_out" else f"payload_{label}", payload.json())
     raw = c.get(f"/traces/{trace_id}/raw-spans")
     print("raw-spans:", raw.status_code)
     _rest.save("raw_spans", raw.json())

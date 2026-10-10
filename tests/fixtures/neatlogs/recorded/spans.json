@@ -1,0 +1,47 @@
+{
+  "data": {
+    "page": {
+      "hasMore": false,
+      "limit": 50,
+      "nextCursor": null
+    },
+    "spans": [
+      {
+        "completionTokens": 0,
+        "costUsd": 0,
+        "durationMs": 76232,
+        "endedAt": "2026-10-10T16:21:12.866Z",
+        "model": null,
+        "parentSpanId": null,
+        "promptTokens": 0,
+        "provider": null,
+        "spanId": "7c966446b0d46649",
+        "spanName": "day1-run",
+        "spanType": "WORKFLOW",
+        "startedAt": "2026-10-10T16:19:56.634Z",
+        "status": "OK",
+        "totalTokens": 0,
+        "traceId": "25881a8c1ca64f97bda35464386de3ba"
+      },
+      {
+        "completionTokens": 0,
+        "costUsd": 0,
+        "durationMs": 1,
+        "endedAt": "2026-10-10T16:19:56.635Z",
+        "model": null,
+        "parentSpanId": "7c966446b0d46649",
+        "promptTokens": 0,
+        "provider": null,
+        "spanId": "bc89bfb07efed2de",
+        "spanName": "day1_notes_write",
+        "spanType": "TOOL",
+        "startedAt": "2026-10-10T16:19:56.634Z",
+        "status": "OK",
+        "totalTokens": 0,
+        "traceId": "25881a8c1ca64f97bda35464386de3ba"
+      }
+    ]
+  },
+  "requestId": "req_47023e699e61326c715e7ed2b47c74d1",
+  "success": true
+}

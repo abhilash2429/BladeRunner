@@ -1,0 +1,65 @@
+{
+  "data": {
+    "page": {
+      "hasMore": false,
+      "limit": 25,
+      "nextCursor": null
+    },
+    "spans": [
+      {
+        "durationMs": 76232,
+        "endedAt": "2026-10-10T16:21:12.866Z",
+        "error": {
+          "messagePreview": "",
+          "truncated": false,
+          "type": null
+        },
+        "input": {
+          "mimeType": "application/json",
+          "preview": "{}",
+          "truncated": false
+        },
+        "output": {
+          "mimeType": "application/json",
+          "preview": "null",
+          "truncated": false
+        },
+        "parentSpanId": null,
+        "spanId": "7c966446b0d46649",
+        "spanName": "day1-run",
+        "spanType": "WORKFLOW",
+        "startedAt": "2026-10-10T16:19:56.634Z",
+        "status": "OK",
+        "traceId": "25881a8c1ca64f97bda35464386de3ba"
+      },
+      {
+        "durationMs": 1,
+        "endedAt": "2026-10-10T16:19:56.635Z",
+        "error": {
+          "messagePreview": "",
+          "truncated": false,
+          "type": null
+        },
+        "input": {
+          "mimeType": "application/json",
+          "preview": "{\"tool\":\"day1_notes_write\",\"target_host\":\"127.0.0.1:8102\",\"args\":{\"body\":\"hello\"}}",
+          "truncated": false
+        },
+        "output": {
+          "mimeType": "application/json",
+          "preview": "\"ok\"",
+          "truncated": false
+        },
+        "parentSpanId": "7c966446b0d46649",
+        "spanId": "bc89bfb07efed2de",
+        "spanName": "day1_notes_write",
+        "spanType": "TOOL",
+        "startedAt": "2026-10-10T16:19:56.634Z",
+        "status": "OK",
+        "traceId": "25881a8c1ca64f97bda35464386de3ba"
+      }
+    ]
+  },
+  "requestId": "req_6384341aa7c0c5c678138ea50aaf420c",
+  "success": true
+}

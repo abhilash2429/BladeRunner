@@ -1,0 +1,27 @@
+{
+  "data": {
+    "completedAt": "2026-10-10T16:18:59.096Z",
+    "durationMs": 77893,
+    "finalizationStatus": "finalized",
+    "framework": "",
+    "ingestedAt": "2026-10-10T16:17:41.836Z",
+    "llmCallsCount": 0,
+    "sessionId": "day1-1791649060",
+    "spansCount": 2,
+    "startedAt": "2026-10-10T16:17:40.515Z",
+    "status": "OK",
+    "tags": [
+      "agent:day1_agent"
+    ],
+    "toolCallsCount": 1,
+    "totalCostUsd": 0,
+    "totalTokens": 0,
+    "traceId": "799e6fc99b3ee9e28124102b6c4869a4",
+    "traceName": "day1-run",
+    "workflowName": "day1-visibility",
+    "metadataRevision": 0,
+    "metadataUpdatedAt": null
+  },
+  "requestId": "req_5ed225765ccd1b206f209ebfe1b81b49",
+  "success": true
+}

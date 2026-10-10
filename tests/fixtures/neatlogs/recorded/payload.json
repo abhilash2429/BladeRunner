@@ -1,0 +1,22 @@
+{
+  "data": {
+    "fields": {
+      "input": {
+        "available": true,
+        "mimeType": "application/json",
+        "truncated": false,
+        "value": "{\"tool\":\"day1_notes_write\",\"target_host\":\"127.0.0.1:8102\",\"args\":{\"body\":\"hello\"}}"
+      },
+      "output": {
+        "available": true,
+        "mimeType": "application/json",
+        "truncated": false,
+        "value": "\"ok\""
+      }
+    },
+    "spanId": "bc89bfb07efed2de",
+    "traceId": "25881a8c1ca64f97bda35464386de3ba"
+  },
+  "requestId": "req_643c8a3932d99ca58be86d50bff16094",
+  "success": true
+}

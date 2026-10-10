@@ -1,27 +1,25 @@
 {
   "data": {
     "completedAt": "2026-10-10T16:21:13.591Z",
-    "durationMs": 0,
-    "finalizationStatus": "pending",
+    "durationMs": 76232,
+    "finalizationStatus": "finalized",
     "framework": "",
     "ingestedAt": "2026-10-10T16:19:58.446Z",
     "llmCallsCount": 0,
     "sessionId": "day1-1791649196",
-    "spansCount": 0,
+    "spansCount": 2,
     "startedAt": "2026-10-10T16:19:56.634Z",
     "status": "OK",
     "tags": [
-      "agent:day1_agent"
+      "day1-probe"
     ],
-    "toolCallsCount": 0,
+    "toolCallsCount": 1,
     "totalCostUsd": 0,
     "totalTokens": 0,
     "traceId": "25881a8c1ca64f97bda35464386de3ba",
-    "traceName": "day1_notes_write",
+    "traceName": "day1 probe",
     "workflowName": "day1-visibility",
-    "metadataRevision": 0,
-    "metadataUpdatedAt": null
-  },
-  "requestId": "req_eea085e85396b779975fa3f4c49eabd7",
-  "success": true
+    "metadataRevision": 2,
+    "metadataUpdatedAt": "2026-10-10T16:27:08.535Z"
+  }
 }

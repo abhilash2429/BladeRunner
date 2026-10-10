@@ -1,0 +1,31 @@
+{
+  "data": {
+    "createdAt": "2026-10-10T16:27:35.401Z",
+    "displayName": "day1 regex notes_write",
+    "groupId": "76e8831d-1b48-446e-84c4-e0083442414b",
+    "groupName": "bladerunner",
+    "id": "261f759d-9f0b-49f0-8a3b-4f50dd61a397",
+    "isActive": true,
+    "slug": "custom_regex_6qQWxLRzvl",
+    "threshold": 0.5,
+    "type": "regex",
+    "updatedAt": "2026-10-10T16:27:35.587Z",
+    "batchFields": null,
+    "description": null,
+    "generatedDescription": null,
+    "runOn": {
+      "frequency": "span_name",
+      "span_names": [
+        "day1_notes_write"
+      ]
+    },
+    "config": {
+      "input_pattern": ".+",
+      "output_pattern": null,
+      "operator": "OR",
+      "case_sensitive": false
+    }
+  },
+  "requestId": "req_3875a2d5a427aed4384f460e9840d5f9",
+  "success": true
+}

@@ -1,0 +1,16 @@
+{
+  "data": {
+    "fields": {
+      "input": {
+        "available": true,
+        "mimeType": "application/json",
+        "truncated": false,
+        "value": "{\"tool\":\"day1_notes_write\",\"target_host\":\"127.0.0.1:8102\",\"args\":{\"body\":\"hello\"}}"
+      }
+    },
+    "spanId": "bc89bfb07efed2de",
+    "traceId": "25881a8c1ca64f97bda35464386de3ba"
+  },
+  "requestId": "req_72d1af35dc683e0964812caf5c2a27d4",
+  "success": true
+}

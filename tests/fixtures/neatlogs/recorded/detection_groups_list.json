@@ -1,0 +1,37 @@
+{
+  "data": {
+    "groups": [
+      {
+        "createdAt": "2026-10-10T16:22:57.519Z",
+        "id": "76e8831d-1b48-446e-84c4-e0083442414b",
+        "name": "bladerunner",
+        "updatedAt": "2026-10-10T16:22:57.519Z"
+      },
+      {
+        "createdAt": "2026-10-10T07:01:50.073Z",
+        "id": "96db97e3-55b6-497c-81aa-03621d4da63a",
+        "name": "Neutral",
+        "updatedAt": "2026-10-10T07:01:50.073Z"
+      },
+      {
+        "createdAt": "2026-10-10T07:01:50.070Z",
+        "id": "2635d607-2ccd-4c82-ae07-7060f2024d43",
+        "name": "Negative",
+        "updatedAt": "2026-10-10T07:01:50.070Z"
+      },
+      {
+        "createdAt": "2026-10-10T07:01:50.066Z",
+        "id": "5d16499f-bce3-4a87-a8b8-71315182a0f4",
+        "name": "Positive",
+        "updatedAt": "2026-10-10T07:01:50.066Z"
+      }
+    ],
+    "page": {
+      "hasMore": false,
+      "limit": 50,
+      "nextCursor": null
+    }
+  },
+  "requestId": "req_8aaa3a7e71f76e3ac705976a59d0a5bd",
+  "success": true
+}

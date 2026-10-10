@@ -1,0 +1,12 @@
+{
+  "data": {
+    "hits": [],
+    "page": {
+      "hasMore": false,
+      "limit": 20,
+      "nextCursor": null
+    }
+  },
+  "requestId": "req_cf64f0e562f0b6528f2aef6fb6ab60c0",
+  "success": true
+}

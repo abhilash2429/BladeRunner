@@ -1,0 +1,37 @@
+{
+  "data": {
+    "detections": [
+      {
+        "createdAt": "2026-10-10T16:33:37.305Z",
+        "displayName": "day1 conditional target_host",
+        "groupId": "76e8831d-1b48-446e-84c4-e0083442414b",
+        "groupName": "bladerunner",
+        "id": "3cac48fb-bfb4-4517-a88b-836452ed3fa5",
+        "isActive": true,
+        "slug": "custom_conditional_2oDA97e2Hg",
+        "threshold": 0.5,
+        "type": "conditional",
+        "updatedAt": "2026-10-10T16:33:37.458Z"
+      },
+      {
+        "createdAt": "2026-10-10T16:27:35.401Z",
+        "displayName": "day1 regex notes_write",
+        "groupId": "76e8831d-1b48-446e-84c4-e0083442414b",
+        "groupName": "bladerunner",
+        "id": "261f759d-9f0b-49f0-8a3b-4f50dd61a397",
+        "isActive": true,
+        "slug": "custom_regex_6qQWxLRzvl",
+        "threshold": 0.5,
+        "type": "regex",
+        "updatedAt": "2026-10-10T16:27:35.587Z"
+      }
+    ],
+    "page": {
+      "hasMore": false,
+      "limit": 100,
+      "nextCursor": null
+    }
+  },
+  "requestId": "req_3bc26f99ba06288dc090776dbfb13e2f",
+  "success": true
+}
