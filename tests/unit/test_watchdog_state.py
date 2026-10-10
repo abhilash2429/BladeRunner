@@ -1,3 +1,6 @@
+import threading
+import uuid
+
 import pytest
 
 from watchdog.state import InvalidTransition, WatchdogState
@@ -69,3 +72,102 @@ def test_state_survives_reopen(tmp_path):
     s1.conn.close()
     s2 = WatchdogState(path)
     assert s2.get(case.case_id).trace_id == "t1"
+
+
+HIT2 = {"rule_id": "r2", "span_id": "s2"}
+
+
+def _to_dismissed(st, case_id):
+    for to in ("paused", "investigating", "investigated", "dismissed"):
+        st.transition(case_id, to)
+
+
+def test_set_findings_unknown_case_raises_before_writing(st):
+    with pytest.raises(KeyError):
+        st.set_findings("nope", [{"category": "C1"}])
+    assert st.events("nope") == []
+
+
+def test_failed_states_retry_edges(st):
+    case, _ = st.open_case("t1", "r1", "a_1", "native", [HIT])
+    for to in ("paused", "investigating", "investigated", "verified", "quarantine_failed", "quarantined",
+               "patching", "patch_failed", "patching", "patched"):
+        case = st.transition(case.case_id, to)
+    assert case.status == "patched"
+
+
+def test_failed_states_are_active(st):
+    case, _ = st.open_case("t1", "r1", "a_1", "native", [HIT])
+    for to in ("paused", "investigating", "investigated", "verified", "quarantine_failed"):
+        st.transition(case.case_id, to)
+    assert [c.case_id for c in st.active_cases("quarantine_failed")] == [case.case_id]
+    st.transition(case.case_id, "quarantined")
+    st.transition(case.case_id, "patching")
+    st.transition(case.case_id, "patch_failed")
+    assert [c.case_id for c in st.active_cases("patch_failed")] == [case.case_id]
+    assert [c.case_id for c in st.active_cases()] == [case.case_id]
+
+
+def test_dismissed_is_not_active(st):
+    case, _ = st.open_case("t1", "r1", "a_1", "native", [HIT])
+    _to_dismissed(st, case.case_id)
+    assert st.active_cases() == []
+
+
+def test_bump_retry_counts_per_kind(st):
+    case, _ = st.open_case("t1", "r1", "a_1", "native", [HIT])
+    assert st.bump_retry(case.case_id, "quarantine") == 1
+    assert st.bump_retry(case.case_id, "quarantine") == 2
+    assert st.bump_retry(case.case_id, "patch") == 1
+    assert st.get(case.case_id).extra == {"retries": {"quarantine": 2, "patch": 1}}
+
+
+def test_bump_retry_unknown_case_raises(st):
+    with pytest.raises(KeyError):
+        st.bump_retry("nope", "patch")
+
+
+def test_reopen_keeps_flagged_at(st):
+    case, _ = st.open_case("t1", "r1", "a_1", "native", [HIT])
+    _to_dismissed(st, case.case_id)
+    reopened, changed = st.open_case("t1", "r1", "a_1", "local", [HIT2])
+    assert changed and reopened.status == "flagged"
+    assert reopened.flagged_at == case.flagged_at
+
+
+def test_unknown_case_raises_keyerror(st):
+    with pytest.raises(KeyError, match="nope"):
+        st.get("nope")
+    with pytest.raises(KeyError, match="nope"):
+        st.transition("nope", "paused")
+
+
+def test_hits_deduped_within_one_call(st):
+    case, changed = st.open_case("t1", "r1", "a_1", "native", [HIT, HIT])
+    assert changed and len(case.evidence) == 1
+    again, changed = st.open_case("t1", "r1", "a_1", "local", [HIT2, HIT2, HIT])
+    assert changed and len(again.evidence) == 2
+
+
+def test_case_id_is_full_uuid_hex(st):
+    case, _ = st.open_case("t1", "r1", "a_1", "native", [HIT])
+    assert len(case.case_id) == 32
+    assert uuid.UUID(hex=case.case_id).hex == case.case_id
+
+
+def test_concurrent_open_case_creates_one_case(st):
+    barrier = threading.Barrier(2)
+    results = []
+
+    def worker():
+        barrier.wait()
+        results.append(st.open_case("t1", "r1", "a_1", "native", [HIT]))
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(changed for _, changed in results) == [False, True]
+    assert len({case.case_id for case, _ in results}) == 1
+    assert len(st.all_cases()) == 1

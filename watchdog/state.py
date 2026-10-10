@@ -15,14 +15,16 @@ TRANSITIONS: dict[str, set[str]] = {
     "investigated": {"verified", "needs_review", "dismissed"},
     "dismissed": {"flagged"},
     "verified": {"quarantined", "quarantine_failed"},
+    "quarantine_failed": {"quarantined"},
     "quarantined": {"patching"},
     "patching": {"patched", "patch_failed"},
+    "patch_failed": {"patching"},
     "patched": {"confirming"},
     "confirming": {"fixed", "not_fixed"},
 }
-ACTIVE = ("flagged", "paused", "investigating", "investigated", "verified", "quarantined", "patching",
-          "patched", "confirming")
-_STAMPS = {"flagged": "flagged_at", "paused": "paused_at", "quarantined": "quarantined_at"}
+ACTIVE = ("flagged", "paused", "investigating", "investigated", "verified", "quarantine_failed", "quarantined",
+          "patching", "patch_failed", "patched", "confirming")
+_STAMPS = {"paused": "paused_at", "quarantined": "quarantined_at"}
 
 SCHEMA = [
     """CREATE TABLE IF NOT EXISTS cases (
@@ -44,6 +46,16 @@ class InvalidTransition(ValueError):
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _fresh(hits: list[dict], seen: set[tuple[str, str]]) -> list[dict]:
+    out = []
+    for h in hits:
+        key = (h["rule_id"], h["span_id"])
+        if key not in seen:
+            seen.add(key)
+            out.append(h)
+    return out
 
 
 @dataclass
@@ -87,7 +99,10 @@ class WatchdogState:
                     row["flagged_at"], row["paused_at"], row["quarantined_at"], json.loads(row["extra"]))
 
     def get(self, case_id: str) -> Case:
-        return self._case(self._rows("SELECT * FROM cases WHERE case_id = ?", (case_id,))[0])
+        rows = self._rows("SELECT * FROM cases WHERE case_id = ?", (case_id,))
+        if not rows:
+            raise KeyError(case_id)
+        return self._case(rows[0])
 
     def case_for_trace(self, trace_id: str) -> Case | None:
         rows = self._rows("SELECT * FROM cases WHERE trace_id = ?", (trace_id,))
@@ -107,14 +122,14 @@ class WatchdogState:
         with self._lock:
             existing = self.case_for_trace(trace_id)
             if existing is None:
-                case_id = uuid.uuid4().hex[:10]
+                hits = _fresh(hits, set())
+                case_id = uuid.uuid4().hex
                 self._exec("INSERT INTO cases VALUES (?, ?, ?, ?, 'flagged', ?, ?, '[]', ?, ?, NULL, NULL, '{}', ?)",
                            (case_id, trace_id, run_id, agent, source, json.dumps(hits), str(uuid.uuid4()),
                             _now(), _now()))
                 self.log_event(case_id, "opened", {"source": source, "hits": hits})
                 return self.get(case_id), True
-            known = {(h["rule_id"], h["span_id"]) for h in existing.evidence}
-            new = [h for h in hits if (h["rule_id"], h["span_id"]) not in known]
+            new = _fresh(hits, {(h["rule_id"], h["span_id"]) for h in existing.evidence})
             new_source = existing.source if existing.source == source else "both"
             self._exec("UPDATE cases SET evidence = ?, source = ?, updated_at = ? WHERE case_id = ?",
                        (json.dumps(existing.evidence + new), new_source, _now(), existing.case_id))
@@ -139,9 +154,20 @@ class WatchdogState:
             return self.get(case_id)
 
     def set_findings(self, case_id: str, findings: list[dict]) -> None:
-        self._exec("UPDATE cases SET findings = ?, updated_at = ? WHERE case_id = ?",
-                   (json.dumps(findings), _now(), case_id))
-        self.log_event(case_id, "findings", {"findings": findings})
+        with self._lock:
+            self.get(case_id)
+            self._exec("UPDATE cases SET findings = ?, updated_at = ? WHERE case_id = ?",
+                       (json.dumps(findings), _now(), case_id))
+            self.log_event(case_id, "findings", {"findings": findings})
+
+    def bump_retry(self, case_id: str, kind: str) -> int:
+        with self._lock:
+            extra = self.get(case_id).extra
+            retries = extra.setdefault("retries", {})
+            retries[kind] = retries.get(kind, 0) + 1
+            self._exec("UPDATE cases SET extra = ?, updated_at = ? WHERE case_id = ?",
+                       (json.dumps(extra, default=str), _now(), case_id))
+            return retries[kind]
 
     def set_extra(self, case_id: str, **kv) -> None:
         with self._lock:
