@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 import duckdb
@@ -50,6 +51,7 @@ def load_gold(frozen: Path) -> dict[str, set[str]]:
 
 
 def score(pred: dict[str, set[str]], gold: dict[str, set[str]], categories=SCORED) -> dict:
+    pred = {t: p & set(categories) for t, p in pred.items()}
     per = {}
     for c in categories:
         tp = sum(1 for t, g in gold.items() if c in g and c in pred.get(t, set()))
@@ -72,18 +74,20 @@ def predict_final(source: FrozenSource, investigator, verifier, policy_text_for,
                   errors: list | None = None) -> dict[str, set[str]]:
     pred: dict[str, set[str]] = {}
     for info in source.list_traces(None, None):
-        role = role_of(info.agent or "")
-        rules = compile_policy(Policy.from_yaml_text(policy_text_for(role)))
-        hits = evaluate_trace(rules, source.spans(info.trace_id))
-        if not hits:
-            pred[info.trace_id] = set()
-            continue
-        tag = f"{tag_prefix}{info.trace_id}"
         try:
+            role = role_of(info.agent or "")
+            rules = compile_policy(Policy.from_yaml_text(policy_text_for(role)))
+            hits = evaluate_trace(rules, source.spans(info.trace_id))
+            if not hits:
+                pred[info.trace_id] = set()
+                continue
+            tag = f"{tag_prefix}{info.trace_id}"
             findings = investigator.investigate(trace_id=info.trace_id, session_id=info.session_id, agent=info.agent,
                                                 hits=[{"rule_id": h.rule_id, "span_id": h.span_id} for h in hits],
                                                 tag=tag)
             verified = verifier.verify(trace_id=info.trace_id, session_id=info.session_id, findings=findings, tag=tag)
+            pred[info.trace_id] = ({f.category for f in verified if f.verdict == "upheld"}
+                                   if decide(verified) == "verified" else set())
         except BudgetExceeded:
             raise
         except Exception as e:
@@ -91,34 +95,57 @@ def predict_final(source: FrozenSource, investigator, verifier, policy_text_for,
             if errors is not None:
                 errors.append(info.trace_id)
             pred[info.trace_id] = set()
-            continue
-        pred[info.trace_id] = ({f.category for f in verified if f.verdict == "upheld"}
-                               if decide(verified) == "verified" else set())
     return pred
 
 
-def predict_v0(source: FrozenSource, llm, model: str, policy_text_for, ledger=None, tag_prefix: str = "") -> dict[str, set[str]]:
+def predict_v0(source: FrozenSource, llm, model: str, policy_text_for, ledger=None, tag_prefix: str = "",
+               errors: list | None = None) -> dict[str, set[str]]:
     from common.llm import extract_json
 
     catalog = load_catalog()
     categories = "\n".join(f"- {k}: {v['name']}. {v['description']}" for k, v in catalog.items())
     pred: dict[str, set[str]] = {}
     for info in source.list_traces(None, None):
-        payload = {"policy": policy_text_for(role_of(info.agent or "")),
-                   "spans": compact_tree(source.spans(info.trace_id), limit=800)}
-        if ledger:
-            ledger.check(model)
-        resp = llm.chat.completions.create(model=model, max_tokens=300, messages=[
-            {"role": "system", "content": V0_PROMPT.format(categories=categories)},
-            {"role": "user", "content": json.dumps(payload)}])
-        if ledger:
-            ledger.record(model, getattr(resp, "usage", None), tag=f"{tag_prefix}{info.trace_id}")
         try:
+            payload = {"policy": policy_text_for(role_of(info.agent or "")),
+                       "spans": compact_tree(source.spans(info.trace_id), limit=800)}
+            if ledger:
+                ledger.check(model)
+            resp = llm.chat.completions.create(model=model, max_tokens=300, messages=[
+                {"role": "system", "content": V0_PROMPT.format(categories=categories)},
+                {"role": "user", "content": json.dumps(payload)}])
+            if ledger:
+                ledger.record(model, getattr(resp, "usage", None), tag=f"{tag_prefix}{info.trace_id}")
             cats = extract_json(resp.choices[0].message.content or "").get("categories", [])
-        except ValueError:
-            cats = []
-        pred[info.trace_id] = {c for c in cats if isinstance(c, str) and c in catalog} if isinstance(cats, list) else set()
+            pred[info.trace_id] = ({c for c in cats if isinstance(c, str) and c in catalog}
+                                   if isinstance(cats, list) else set())
+        except BudgetExceeded:
+            raise
+        except Exception as e:
+            log.warning("trace %s: %s", info.trace_id, type(e).__name__)
+            if errors is not None:
+                errors.append(info.trace_id)
+            pred[info.trace_id] = set()
     return pred
+
+
+def cost_per_trace(ledger, prefix: str, trace_ids) -> float:
+    ids = list(trace_ids)
+    return sum(ledger.total(tag=f"{prefix}{t}") for t in ids) / max(1, len(ids))
+
+
+def check_coverage(manifest_ids, gold_ids) -> None:
+    manifest_ids, gold_ids = set(manifest_ids), set(gold_ids)
+    if manifest_ids != gold_ids:
+        raise SystemExit(f"frozen manifest and gold trace ids mismatch: only in manifest {sorted(manifest_ids - gold_ids)}, "
+                         f"only in gold {sorted(gold_ids - manifest_ids)}")
+
+
+def manifest_counts(manifest: dict) -> dict:
+    traces = manifest.get("traces", {}).values()
+    return {"degraded_spans": sum(len(t.get("degraded_spans", [])) for t in traces),
+            "not_finalized": sum(1 for t in traces if t.get("not_finalized")),
+            "problems": len(manifest.get("problems", []))}
 
 
 def _fmt(x) -> str:
@@ -160,32 +187,41 @@ def main() -> None:
     source = FrozenSource(frozen)
     policy_text_for = frozen_policy_text(source.manifest)
     gold = load_gold(frozen)
+    check_coverage(source.manifest["traces"], gold)
     ledger = SpendLedger(RUNS_DIR / "spend.jsonl")
     inv_llm, inv_model = make_client("investigator")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
     results: dict[str, dict] = {}
     out_dir = REPO_ROOT / "bench" / "results"
     out_dir.mkdir(exist_ok=True)
+
+    def finish(mode: str, pred: dict, errors: list, prefix: str) -> None:
+        res = score(pred, gold)
+        res.update(errors=len(errors), cost_per_trace_usd=cost_per_trace(ledger, prefix, gold), **manifest_counts(source.manifest))
+        results[mode] = res
+        (out_dir / f"{mode}.json").write_text(json.dumps(res, indent=2), encoding="utf-8")
+
     if args.mode in ("v0", "both"):
-        pred = predict_v0(source, inv_llm, inv_model, policy_text_for, ledger, tag_prefix="bench:v0:")
-        results["v0"] = score(pred, gold)
-        results["v0"]["cost_per_trace_usd"] = sum(ledger.total(tag=f"bench:v0:{t}") for t in gold) / max(1, len(gold))
+        errors: list[str] = []
+        prefix = f"bench:v0:{stamp}:"
+        finish("v0", predict_v0(source, inv_llm, inv_model, policy_text_for, ledger, tag_prefix=prefix, errors=errors),
+               errors, prefix)
     if args.mode in ("final", "both"):
         ver_llm, ver_model = make_client("verifier_scored" if args.verifier == "scored" else "verifier_dev")
         inv = Investigator(inv_llm, inv_model, source, policy_text_for=policy_text_for,
                            memory=GrepMemory(frozen / "incidents"), ledger=ledger)
         ver = Verifier(ver_llm, ver_model, source, ledger=ledger)
-        errors: list[str] = []
-        pred = predict_final(source, inv, ver, policy_text_for, tag_prefix="bench:final:", errors=errors)
-        results["final"] = score(pred, gold)
-        results["final"]["errors"] = len(errors)
-        results["final"]["cost_per_trace_usd"] = sum(ledger.total(tag=f"bench:final:{t}") for t in gold) / max(1, len(gold))
-    for mode, res in results.items():
-        (out_dir / f"{mode}.json").write_text(json.dumps(res, indent=2), encoding="utf-8")
+        errors = []
+        prefix = f"bench:final:{stamp}:"
+        finish("final", predict_final(source, inv, ver, policy_text_for, tag_prefix=prefix, errors=errors), errors, prefix)
     print(markdown_table(results))
     for mode, res in results.items():
         print(f"{mode} cost per trace: ${res['cost_per_trace_usd']:.4f}")
-    if "final" in results:
-        print(f"final errors (traces scored as no findings): {results['final']['errors']}")
+    for mode, res in results.items():
+        print(f"{mode} errors (traces scored as no findings): {res['errors']}")
+        if res["degraded_spans"] or res["not_finalized"] or res["problems"]:
+            print(f"WARNING: frozen set is degraded: {res['degraded_spans']} degraded span(s), "
+                  f"{res['not_finalized']} not finalized, {res['problems']} problem(s)")
     tracing.shutdown()
 
 

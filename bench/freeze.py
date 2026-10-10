@@ -3,8 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import tempfile
 from dataclasses import asdict, replace
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
 
 import duckdb
@@ -14,7 +15,7 @@ from arena.state import ArenaState
 from arena.truth import label_run
 from common.config import REPO_ROOT, RUNS_DIR, load_env
 from watchdog.neatlogs_client import NeatlogsClient, NeatlogsError
-from watchdog.trace_source import Span, normalize_span, text_of, trace_info_from
+from watchdog.trace_source import Span, _is_truncated, _order, _payload_fields, normalize_span, trace_info_from
 
 
 class FreezeError(RuntimeError):
@@ -22,25 +23,17 @@ class FreezeError(RuntimeError):
 
 
 def read_runs(path: Path) -> list[str]:
-    return [json.loads(line)["run_id"] for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+    ids = [json.loads(line)["run_id"] for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+    dupes = sorted({i for i in ids if ids.count(i) > 1})
+    if dupes:
+        raise FreezeError(f"duplicate run ids: {', '.join(dupes)}")
+    return ids
 
 
-def _truncated(value) -> bool:
-    return isinstance(value, dict) and bool(value.get("truncated"))
-
-
-def _payload_text(payload: dict) -> dict:
+def _incomplete(payload: dict, name: str) -> bool:
     fields = payload.get("fields")
-    source = fields if isinstance(fields, dict) else payload
-    return {"input": text_of(source.get("input")), "output": text_of(source.get("output"))}
-
-
-def _order(span: Span) -> tuple[datetime, str]:
-    try:
-        when = datetime.fromisoformat(span.start)
-    except ValueError:
-        when = datetime.min
-    return (when if when.tzinfo else when.replace(tzinfo=timezone.utc)), span.span_id
+    value = (fields if isinstance(fields, dict) else payload).get(name)
+    return isinstance(value, dict) and (bool(value.get("truncated")) or value.get("available") is False)
 
 
 def collect_spans(client, trace_id: str, allow_degraded: bool = False) -> tuple[list[Span], list[str]]:
@@ -48,17 +41,18 @@ def collect_spans(client, trace_id: str, allow_degraded: bool = False) -> tuple[
     degraded: list[str] = []
     for raw in client.get_raw_spans(trace_id):
         span = normalize_span(raw)
-        cut_in, cut_out = _truncated(raw.get("input")), _truncated(raw.get("output"))
+        cut_in, cut_out = _is_truncated(raw.get("input")), _is_truncated(raw.get("output"))
         if cut_in or cut_out:
             try:
-                full = _payload_text(client.get_payload(trace_id, span.span_id))
-                if (cut_in and not full["input"]) or (cut_out and not full["output"]):
-                    raise NeatlogsError(0, "empty payload for truncated field")
+                payload = client.get_payload(trace_id, span.span_id)
+                full = _payload_fields(payload)
+                if any(cut and (not full[f] or _incomplete(payload, f)) for f, cut in (("input", cut_in), ("output", cut_out))):
+                    raise NeatlogsError(0, "incomplete payload for truncated field")
             except (NeatlogsError, httpx.HTTPError) as e:
                 if not allow_degraded:
                     status = getattr(e, "status", None)
                     raise FreezeError(f"trace {trace_id} span {span.span_id}: payload fetch failed: "
-                                      f"{type(e).__name__}{f' {status}' if status else ''}") from e
+                                      f"{type(e).__name__}{f' {status}' if status else ''}") from None
                 degraded.append(span.span_id)
             else:
                 span = replace(span, input=full["input"] if cut_in else span.input,
@@ -67,36 +61,65 @@ def collect_spans(client, trace_id: str, allow_degraded: bool = False) -> tuple[
     return sorted(spans, key=_order), degraded
 
 
-def freeze(run_ids: list[str], client, truth_db: Path, out_dir: Path, incidents_dir: Path,
-           allow_degraded: bool = False) -> dict:
+def _freeze_into(run_ids: list[str], client, truth_db: Path, out_dir: Path, incidents_dir: Path,
+                 allow_degraded: bool) -> dict:
     state = ArenaState(str(truth_db), read_only=True)
-    out_dir = Path(out_dir)
-    (out_dir / "spans").mkdir(parents=True, exist_ok=True)
+    (out_dir / "spans").mkdir(parents=True)
     manifest: dict = {"runs": run_ids, "traces": {}, "policies": {}}
+    problems: list[str] = []
     rows: list[tuple] = []
+
+    def problem(message: str) -> None:
+        if not allow_degraded:
+            raise FreezeError(message)
+        problems.append(message)
+
     for run_id in run_ids:
         run = state.run(run_id)
-        manifest["policies"].update(run["policies"])
+        if run is None:
+            raise FreezeError(f"run {run_id}: not in truth db")
+        for role, text in run["policies"].items():
+            if manifest["policies"].setdefault(role, text) != text:
+                raise FreezeError(f"run {run_id}: policy text for {role} differs from an earlier run")
         labels = label_run(state, run_id)
         since = run["created_at"] - timedelta(minutes=5)
+        seen: dict[str, str] = {}
         for raw in client.list_traces(since=since, until=since + timedelta(hours=3), session_id=run_id,
                                       workflow_name="arena-agent"):
             info = trace_info_from(raw)
+            if info.agent not in run["agents"]:
+                problem(f"run {run_id} trace {info.trace_id}: agent {info.agent or 'untagged'} is not in the run")
+                continue
+            if info.agent in seen:
+                problem(f"run {run_id} agent {info.agent}: extra trace {info.trace_id} (kept {seen[info.agent]})")
+                continue
+            seen[info.agent] = info.trace_id
             if info.finalization != "finalized" and not allow_degraded:
                 raise FreezeError(f"trace {info.trace_id}: not finalized ({info.finalization})")
             spans, degraded = collect_spans(client, info.trace_id, allow_degraded)
+            mismatch = info.finalization == "finalized" and info.spans_count > 0 and info.spans_count != len(spans)
+            if mismatch and not allow_degraded:
+                raise FreezeError(f"trace {info.trace_id}: collected {len(spans)} spans, expected {info.spans_count}")
             (out_dir / "spans" / f"{info.trace_id}.json").write_text(
                 json.dumps([asdict(s) for s in spans], indent=1), encoding="utf-8")
             entry = {"run_id": run_id, "agent": info.agent, "session_id": info.session_id,
-                     "tags": list(info.tags), "started_at": info.started_at}
+                     "tags": [t for t in info.tags if isinstance(t, str) and t.startswith("agent:")],
+                     "started_at": info.started_at}
             if degraded:
                 entry["degraded_spans"] = degraded
+            if mismatch:
+                entry["span_count_mismatch"] = True
             if info.finalization != "finalized":
                 entry["not_finalized"] = True
             manifest["traces"][info.trace_id] = entry
             cats = sorted({l.category for l in labels if l.agent == info.agent})
             rows.extend((info.trace_id, run_id, info.agent, c) for c in cats) if cats else rows.append(
                 (info.trace_id, run_id, info.agent, None))
+        for agent in run["agents"]:
+            if agent not in seen:
+                problem(f"run {run_id} agent {agent}: missing trace")
+    if problems:
+        manifest["problems"] = problems
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     con = duckdb.connect()
     con.execute("CREATE TABLE l (trace_id VARCHAR, run_id VARCHAR, agent VARCHAR, category VARCHAR)")
@@ -105,6 +128,23 @@ def freeze(run_ids: list[str], client, truth_db: Path, out_dir: Path, incidents_
     con.execute(f"COPY l TO '{(out_dir / 'labels.parquet').as_posix()}' (FORMAT PARQUET)")
     if Path(incidents_dir).exists():
         shutil.copytree(incidents_dir, out_dir / "incidents", dirs_exist_ok=True)
+    return manifest
+
+
+def freeze(run_ids: list[str], client, truth_db: Path, out_dir: Path, incidents_dir: Path,
+           allow_degraded: bool = False) -> dict:
+    out_dir = Path(out_dir)
+    out_dir.parent.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(prefix=f"{out_dir.name}.tmp-", dir=out_dir.parent))
+    try:
+        manifest = _freeze_into(run_ids, client, truth_db, tmp, incidents_dir, allow_degraded)
+        tmp.chmod(0o755)
+        if out_dir.exists():
+            shutil.rmtree(out_dir)
+        tmp.rename(out_dir)
+    except BaseException:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
     return manifest
 
 
@@ -118,7 +158,7 @@ def stats(run_ids: list[str], truth_db: Path) -> None:
         violating += sum(1 for v in by_agent.values() if v)
         clean += sum(1 for v in by_agent.values() if not v)
         print(run_id, run["scenario"], by_agent)
-    print(f"traces: {violating + clean} (violating {violating}, clean {clean})")
+    print(f"traces: {violating + clean} (violating {violating}, clean {clean}); freeze enforces exactly one trace per agent")
 
 
 def main() -> None:
@@ -142,6 +182,8 @@ def main() -> None:
     partial = sum(1 for t in manifest["traces"].values() if t.get("not_finalized"))
     if partial:
         print(f"WARNING: {partial} trace(s) frozen before finalization, see not_finalized in the manifest")
+    if manifest.get("problems"):
+        print(f"WARNING: {len(manifest['problems'])} problem(s) kept out of the gold set, see problems in the manifest")
     print(f"froze {len(manifest['traces'])} traces into {args.out}")
 
 

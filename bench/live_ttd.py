@@ -17,6 +17,7 @@ def _ts(value) -> datetime | None:
 def ttd_rows(incidents_dir: Path, truth_db: Path) -> list[dict]:
     state = ArenaState(str(truth_db), read_only=True)
     rows = []
+    skipped = 0
     for path in sorted(Path(incidents_dir).glob("*.json")):
         case = json.loads(path.read_text(encoding="utf-8"))["case"]
         paused, quarantined = _ts(case.get("paused_at")), _ts(case.get("quarantined_at"))
@@ -27,9 +28,15 @@ def ttd_rows(incidents_dir: Path, truth_db: Path) -> list[dict]:
         if not times:
             continue
         first = min(times)
+        if paused < first:
+            skipped += 1
+            print(f"WARNING: skipping case {case['case_id']}: paused before the first labeled request")
+            continue
         rows.append({"case_id": case["case_id"], "violation_ts": str(first),
                      "pause_s": (paused - first).total_seconds(),
                      "quarantine_s": (quarantined - first).total_seconds() if quarantined else None})
+    if skipped:
+        print(f"WARNING: skipped {skipped} case(s) with negative pause_s")
     return rows
 
 

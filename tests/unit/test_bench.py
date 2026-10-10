@@ -6,10 +6,10 @@ import duckdb
 import pytest
 
 from arena.state import ArenaState
-from bench.freeze import FreezeError, collect_spans, freeze
+from bench.freeze import FreezeError, collect_spans, freeze, read_runs
 from bench.live_ttd import ttd_rows
-from bench.score import (frozen_policy_text, load_gold, markdown_table, predict_final, predict_v0,
-                         score)
+from bench.score import (check_coverage, cost_per_trace, frozen_policy_text, load_gold, manifest_counts,
+                         markdown_table, predict_final, predict_v0, score)
 from common.llm import BudgetExceeded
 from common.policy import load_policy_text
 from watchdog.investigator import Finding
@@ -83,15 +83,35 @@ def test_ttd_rows(tmp_path):
     assert rows[0]["pause_s"] == pytest.approx(5.0, abs=0.01) and rows[0]["quarantine_s"] == pytest.approx(40.0, abs=0.01)
 
 
+def test_ttd_rows_skips_negative_pause(tmp_path, capsys):
+    db = tmp_path / "truth.duckdb"
+    st = ArenaState(str(db))
+    run_id = st.register_run("planted_dev", 0, ["research_agent_1"], {"research_agent": load_policy_text("research_agent")}, "s")["run_id"]
+    st.log_request(run_id=run_id, agent="research_agent_1", step=2, tool="notes_write", service="notes",
+                   method="POST", path="/notes", args={"body": "x"})
+    violation_ts = st.requests_for(run_id)[0]["ts"]
+    st.conn.close()
+    inc = tmp_path / "incidents"
+    inc.mkdir()
+    case = {"case_id": "early", "run_id": run_id, "agent": "research_agent_1", "paused_at": str(violation_ts - timedelta(seconds=5))}
+    (inc / "early.json").write_text(json.dumps({"case": case}))
+    assert ttd_rows(inc, db) == []
+    assert "skipped 1 case" in capsys.readouterr().out
+
+
 class FakeClient:
-    def __init__(self, raw, payloads, fail=(), finalization="finalized"):
+    def __init__(self, raw, payloads, fail=(), finalization="finalized", traces=None):
         self.raw, self.payloads, self.fail = raw, payloads, set(fail)
         self.finalization = finalization
+        self.traces = traces
         self.payload_calls = []
 
     def list_traces(self, **kw):
-        return [{"traceId": "tr1", "sessionId": "", "tags": ["agent:research_agent_1"], "startedAt": "2026-01-01T00:00:00Z",
-                 "finalizationStatus": self.finalization}]
+        if isinstance(self.traces, dict):
+            return self.traces[kw["session_id"]]
+        if self.traces is not None:
+            return self.traces
+        return [trace("tr1", "research_agent_1", self.finalization)]
 
     def get_raw_spans(self, trace_id):
         return self.raw
@@ -103,6 +123,12 @@ class FakeClient:
         return self.payloads[span_id]
 
 
+def trace(trace_id, agent="research_agent_1", finalization="finalized", **extra):
+    tags = [f"agent:{agent}"] if agent else ["misc"]
+    return {"traceId": trace_id, "sessionId": "", "tags": tags, "startedAt": "2026-01-01T00:00:00Z",
+            "finalizationStatus": finalization, **extra}
+
+
 def wrapper(text, truncated=False):
     return {"mimeType": "application/json", "preview": text, "truncated": truncated}
 
@@ -112,20 +138,22 @@ def raw_span(span_id, start, inp, out, kind="LLM", parent=None):
             "startedAt": start, "input": inp, "output": out}
 
 
-def fake_client(fail=(), finalization="finalized"):
+def fake_client(fail=(), finalization="finalized", traces=None, payloads=None):
     raw = [raw_span("b", "2026-01-01T00:00:02Z", wrapper("short"), wrapper("short out"), "TOOL"),
            raw_span("a", "2026-01-01T00:00:01Z", wrapper("prompt pre", True), wrapper("reply pre", True))]
-    payloads = {"a": {"fields": {"input": {"available": True, "truncated": False, "value": "FULL PROMPT"},
-                            "output": {"available": True, "truncated": False, "value": "FULL REPLY"}}}}
-    return FakeClient(raw, payloads, fail, finalization)
+    default = {"a": {"fields": {"input": {"available": True, "truncated": False, "value": "FULL PROMPT"},
+                                "output": {"available": True, "truncated": False, "value": "FULL REPLY"}}}}
+    return FakeClient(raw, payloads if payloads is not None else default, fail, finalization, traces)
 
 
-def frozen_manifest_db(tmp_path):
+def frozen_manifest_db(tmp_path, agents=("research_agent_1",), runs=1, policy_suffix=()):
     db = tmp_path / "truth.duckdb"
     st = ArenaState(str(db))
-    run_id = st.register_run("planted_dev", 0, ["research_agent_1"], {"research_agent": load_policy_text("research_agent")}, "s")["run_id"]
+    ids = [st.register_run("planted_dev", 0, list(agents),
+                           {"research_agent": load_policy_text("research_agent") + (policy_suffix[i] if i < len(policy_suffix) else "")},
+                           "s")["run_id"] for i in range(runs)]
     st.conn.close()
-    return db, run_id
+    return (db, ids[0]) if runs == 1 else (db, ids)
 
 
 def test_collect_spans_fetches_full_payload_for_truncated_only():
@@ -211,3 +239,169 @@ def test_predict_v0_checks_budget_and_tolerates_bad_categories(tmp_path):
     ledger = SimpleNamespace(check=lambda m: checked.append(m), record=lambda *a, **k: 0.0)
     pred = predict_v0(source, llm, "moonshotai.kimi-k2.5", frozen_policy_text(source.manifest), ledger)
     assert pred == {"t_bad": set(), "t_ok": {"C1"}} and len(checked) == 2
+
+
+def run_freeze(tmp_path, client, db, run_ids, allow_degraded=False, name="out"):
+    return freeze(run_ids if isinstance(run_ids, list) else [run_ids], client, db, tmp_path / name, tmp_path / "inc",
+                  allow_degraded=allow_degraded)
+
+
+def test_freeze_rejects_two_traces_for_one_agent(tmp_path):
+    db, run_id = frozen_manifest_db(tmp_path)
+    client = fake_client(traces=[trace("tr1"), trace("tr2")])
+    with pytest.raises(FreezeError, match=f"{run_id}.*research_agent_1"):
+        run_freeze(tmp_path, client, db, run_id)
+    manifest = run_freeze(tmp_path, client, db, run_id, allow_degraded=True, name="out2")
+    assert list(manifest["traces"]) == ["tr1"] and any("research_agent_1" in p for p in manifest["problems"])
+    assert load_gold(tmp_path / "out2").keys() == {"tr1"}
+
+
+def test_freeze_rejects_untagged_trace_and_never_assigns_gold(tmp_path):
+    db, run_id = frozen_manifest_db(tmp_path)
+    client = fake_client(traces=[trace("tr1"), trace("tr9", agent=None)])
+    with pytest.raises(FreezeError, match="tr9"):
+        run_freeze(tmp_path, client, db, run_id)
+    manifest = run_freeze(tmp_path, client, db, run_id, allow_degraded=True, name="out2")
+    assert "tr9" not in manifest["traces"] and any("tr9" in p for p in manifest["problems"])
+    assert "tr9" not in load_gold(tmp_path / "out2")
+
+
+def test_freeze_rejects_trace_for_agent_outside_the_run(tmp_path):
+    db, run_id = frozen_manifest_db(tmp_path)
+    client = fake_client(traces=[trace("tr1"), trace("tr8", agent="writer_agent_1")])
+    with pytest.raises(FreezeError, match="writer_agent_1"):
+        run_freeze(tmp_path, client, db, run_id)
+    manifest = run_freeze(tmp_path, client, db, run_id, allow_degraded=True, name="out2")
+    assert list(manifest["traces"]) == ["tr1"]
+
+
+def test_freeze_rejects_missing_agent_trace(tmp_path):
+    db, run_id = frozen_manifest_db(tmp_path, agents=("research_agent_1", "research_agent_2"))
+    client = fake_client(traces=[trace("tr1")])
+    with pytest.raises(FreezeError, match=f"{run_id}.*research_agent_2"):
+        run_freeze(tmp_path, client, db, run_id)
+    manifest = run_freeze(tmp_path, client, db, run_id, allow_degraded=True, name="out2")
+    assert any("research_agent_2" in p and "missing" in p for p in manifest["problems"])
+
+
+def test_freeze_treats_span_count_mismatch_as_degraded(tmp_path):
+    db, run_id = frozen_manifest_db(tmp_path)
+    client = fake_client(traces=[trace("tr1", spansCount=5)])
+    with pytest.raises(FreezeError, match="tr1.*span"):
+        run_freeze(tmp_path, client, db, run_id)
+    manifest = run_freeze(tmp_path, client, db, run_id, allow_degraded=True, name="out2")
+    assert manifest["traces"]["tr1"]["span_count_mismatch"] is True
+    ok = run_freeze(tmp_path, fake_client(traces=[trace("tr1", spansCount=2)]), db, run_id, name="out3")
+    assert "span_count_mismatch" not in ok["traces"]["tr1"] and "problems" not in ok
+
+
+def test_freeze_refuses_conflicting_policies_even_when_degraded_allowed(tmp_path):
+    db, run_ids = frozen_manifest_db(tmp_path, runs=2, policy_suffix=("", "\n# changed\n"))
+    traces = {run_ids[0]: [trace("tr1")], run_ids[1]: [trace("tr2")]}
+    for allow in (False, True):
+        with pytest.raises(FreezeError, match="research_agent"):
+            run_freeze(tmp_path, fake_client(traces=traces), db, run_ids, allow_degraded=allow, name=f"o{allow}")
+    (tmp_path / "x").mkdir()
+    db2, same = frozen_manifest_db(tmp_path / "x", runs=2)
+    manifest = run_freeze(tmp_path, fake_client(traces={same[0]: [trace("tr1")], same[1]: [trace("tr2")]}), db2, same,
+                          name="ok")
+    assert set(manifest["traces"]) == {"tr1", "tr2"}
+
+
+@pytest.mark.parametrize("flags", [{"truncated": True}, {"available": False}])
+def test_freeze_treats_incomplete_payload_wrapper_as_degraded(tmp_path, flags):
+    db, run_id = frozen_manifest_db(tmp_path)
+    payloads = {"a": {"fields": {"input": {"available": True, "truncated": False, "value": "FULL PROMPT"},
+                                 "output": {"available": True, "truncated": False, "value": "FULL REPLY", **flags}}}}
+    with pytest.raises(FreezeError, match="tr1.*a"):
+        collect_spans(fake_client(payloads=payloads), "tr1")
+    manifest = run_freeze(tmp_path, fake_client(payloads=payloads), db, run_id, allow_degraded=True)
+    assert manifest["traces"]["tr1"]["degraded_spans"] == ["a"]
+    assert json.loads((tmp_path / "out" / "spans" / "tr1.json").read_text())[0]["output"] == "reply pre"
+
+
+def test_failed_freeze_leaves_existing_target_and_no_temp_dirs(tmp_path):
+    db, run_id = frozen_manifest_db(tmp_path)
+    run_freeze(tmp_path, fake_client(), db, run_id)
+    before = (tmp_path / "out" / "manifest.json").read_text()
+    with pytest.raises(FreezeError):
+        run_freeze(tmp_path, fake_client(fail={"a"}), db, run_id)
+    assert (tmp_path / "out" / "manifest.json").read_text() == before
+    assert sorted(p.name for p in tmp_path.iterdir() if p.name.startswith("out")) == ["out"]
+
+
+def test_manifest_keeps_only_agent_tags(tmp_path):
+    db, run_id = frozen_manifest_db(tmp_path)
+    client = fake_client(traces=[dict(trace("tr1"), tags=["agent:research_agent_1", "cat:C1", "verified", "quarantined"])])
+    manifest = run_freeze(tmp_path, client, db, run_id)
+    assert manifest["traces"]["tr1"]["tags"] == ["agent:research_agent_1"]
+
+
+def test_read_runs_rejects_duplicate_run_ids(tmp_path):
+    path = tmp_path / "runs.jsonl"
+    path.write_text('{"run_id": "a"}\n{"run_id": "b"}\n')
+    assert read_runs(path) == ["a", "b"]
+    path.write_text('{"run_id": "a"}\n{"run_id": "a"}\n')
+    with pytest.raises(FreezeError, match="a"):
+        read_runs(path)
+
+
+def test_predict_final_counts_policy_lookup_exception(tmp_path):
+    source = FrozenSource(frozen_dir(tmp_path))
+
+    def missing(role):
+        raise KeyError(role)
+
+    errors: list = []
+    inv = SimpleNamespace(investigate=lambda **kw: [])
+    pred = predict_final(source, inv, SimpleNamespace(verify=lambda **kw: []), missing, errors=errors)
+    assert pred == {"t_bad": set(), "t_ok": set()} and errors == ["t_bad", "t_ok"]
+
+
+def test_predict_v0_counts_api_and_parse_errors(tmp_path):
+    source = FrozenSource(frozen_dir(tmp_path))
+    calls = []
+
+    def create(**kw):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("api down")
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="not json"))], usage=None)
+
+    llm = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    errors: list = []
+    pred = predict_v0(source, llm, "m", frozen_policy_text(source.manifest), errors=errors)
+    assert pred == {"t_bad": set(), "t_ok": set()} and errors == ["t_bad", "t_ok"]
+
+
+def test_predict_v0_budget_exceeded_propagates(tmp_path):
+    source = FrozenSource(frozen_dir(tmp_path))
+
+    def broke(model):
+        raise BudgetExceeded("cap")
+
+    with pytest.raises(BudgetExceeded):
+        predict_v0(source, None, "m", frozen_policy_text(source.manifest), SimpleNamespace(check=broke), errors=[])
+
+
+def test_out_of_scope_prediction_is_not_a_false_alarm():
+    s = score({"t1": {"C6"}, "t2": {"C7", "C1"}}, {"t1": set(), "t2": set()})
+    assert s["false_alarm_rate"] == 0.5 and s["per_category"]["C1"]["fp"] == 1
+
+
+def test_cost_per_trace_uses_only_this_invocation_prefix():
+    rows = {"bench:final:old:t1": 5.0, "bench:final:new:t1": 1.0, "bench:final:new:t2": 3.0}
+    ledger = SimpleNamespace(total=lambda tag: rows.get(tag, 0.0))
+    assert cost_per_trace(ledger, "bench:final:new:", ["t1", "t2"]) == 2.0
+
+
+def test_check_coverage_fails_loudly_on_mismatch():
+    check_coverage({"a", "b"}, {"a", "b"})
+    with pytest.raises(SystemExit, match="mismatch"):
+        check_coverage({"a"}, {"a", "b"})
+
+
+def test_manifest_counts_surface_degradation():
+    manifest = {"traces": {"a": {"degraded_spans": ["s1", "s2"]}, "b": {"not_finalized": True}, "c": {}},
+                "problems": ["x"]}
+    assert manifest_counts(manifest) == {"degraded_spans": 2, "not_finalized": 1, "problems": 1}
