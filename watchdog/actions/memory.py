@@ -9,28 +9,38 @@ import anyio
 
 from common.config import REPO_ROOT, tool_env
 
-NOTE_PREFIX = "docs/incidents/"
-FACT_PREFIXES = ("incidents.", "project.incidents.")
-_REF_KEYS = ("path", "file", "uri", "source", "id")
+NOTE_REF = re.compile(r"docs/incidents/[A-Za-z0-9_-][A-Za-z0-9_.-]*\.md", re.ASCII)
+FACT_REF = re.compile(r"(?:project\.)?incidents\.[Cc][0-9]+(?:\.[A-Za-z0-9_-]+)*", re.ASCII)
+_REF_KEYS = ("path", "file", "uri")
+_TEXT_KEYS = {"text", "content", "fact", "snippet", "summary", "title", "body"}
 _ROOT = str(REPO_ROOT).replace("\\", "/").rstrip("/") + "/"
 _MCP_TIMEOUT_S = 20
 _CLI_TIMEOUT_S = 60
 
 
 def filter_hits(items: list[dict]) -> list[dict]:
-    return [i for i in items if _is_incident_ref(_canonical_ref(i))]
+    return [i for i in items if isinstance(i, dict) and _keep(i)]
 
 
-def _canonical_ref(item: dict) -> str:
-    ref = next((v for k in _REF_KEYS if isinstance(v := item.get(k), str) and v), "")
-    ref = ref.replace("\\", "/").removeprefix("file://").removeprefix(_ROOT).removeprefix("./")
-    return "" if ".." in ref.split("/") else ref
+def _norm(ref: str) -> str:
+    ref = ref.strip().replace("\\", "/").removeprefix("file://").removeprefix(_ROOT).removeprefix("./")
+    return re.sub(r"(#.*|:\d+(?:-\d+)?)$", "", ref)
 
 
 def _is_incident_ref(ref: str) -> bool:
-    if ref.startswith(NOTE_PREFIX):
-        return ref.endswith(".md") and len(ref.rsplit("/", 1)[-1]) > 3
-    return any(ref.startswith(p) and len(ref) > len(p) for p in FACT_PREFIXES)
+    return ".." not in ref.split("/") and bool(NOTE_REF.fullmatch(ref) or FACT_REF.fullmatch(ref))
+
+
+def _keep(item: dict) -> bool:
+    refs = [item[k] for k in _REF_KEYS if k in item] or ([item["id"]] if "id" in item else [])
+    if not refs or not all(isinstance(r, str) and _is_incident_ref(_norm(r)) for r in refs):
+        return False
+    for k, v in item.items():
+        if k in _TEXT_KEYS or k in _REF_KEYS or k == "id":
+            continue
+        if isinstance(v, str) and ("/" in v or v.endswith(".md")) and not _is_incident_ref(_norm(v)):
+            return False
+    return True
 
 
 def items_from_result(result) -> list[dict]:

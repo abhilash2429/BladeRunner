@@ -41,6 +41,15 @@ LEAKS = [
     {"path": "docs/incidents/a/../../plan.md"},
     {"path": 5},
     {"text": "no ref"},
+    {"filepath": "docs/superpowers/plans/p.md", "id": "incidents.a"},
+    {"location": "docs/bladerunner-plan.md", "source": "docs/incidents/a.md"},
+    {"path": {"f": "docs/plan.md"}, "source": "docs/incidents/x.md"},
+    {"path": 3, "id": "incidents.C1.abc"},
+    {"path": "incidents.md"},
+    {"path": "incidents.py"},
+    {"path": "incidents.x/docs/plan.md"},
+    {"path": "project.incidents.c1/docs/bladerunner-plan.md"},
+    {"source": "docs/incidents/a.md"},
 ]
 
 
@@ -52,7 +61,9 @@ def test_filter_hits_drops_leaks(item):
 def test_filter_hits_normalises_refs():
     items = [{"path": f"{REPO_ROOT}/docs/incidents/a.md"}, {"path": "./docs/incidents/b.md"},
              {"uri": "file://" + str(REPO_ROOT).replace("\\", "/") + "/docs/incidents/c.md"},
-             {"file": "docs\\incidents\\d.md"}, {"path": 3, "id": "incidents.C1.abc"}]
+             {"file": "docs\\incidents\\d.md"}, {"id": "incidents.C1.abc", "source": "fact"},
+             {"source": "fact", "id": "project.incidents.c1"}, {"path": "docs/incidents/x.md#L10"},
+             {"path": "docs/incidents/y.md:12", "source": "doc", "title": "Incident y"}]
     assert filter_hits(items) == items
 
 
