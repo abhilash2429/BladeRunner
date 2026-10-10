@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from watchdog.neatlogs_client import NeatlogsError
+
+log = logging.getLogger(__name__)
+
+_WRAPPER_KEYS = ("truncated", "mimeType", "available")
 
 
 @dataclass(frozen=True)
@@ -40,10 +47,11 @@ def text_of(value) -> str:
         return ""
     if isinstance(value, str):
         return value
-    if isinstance(value, dict) and "truncated" in value:
+    if isinstance(value, dict) and any(k in value for k in _WRAPPER_KEYS):
         for key in ("preview", "value"):
             if isinstance(value.get(key), str):
                 return value[key]
+        return ""
     return json.dumps(value)
 
 
@@ -103,6 +111,8 @@ def _find_target(obj):
 def tool_call(span: Span) -> dict | None:
     try:
         parsed = json.loads(span.input)
+        if isinstance(parsed, str):
+            parsed = json.loads(parsed)
     except (json.JSONDecodeError, TypeError):
         return None
     found = _find_target(parsed)
@@ -124,8 +134,19 @@ def compact_tree(spans: list[Span], limit: int = 500) -> list[dict]:
     return out
 
 
-def _order(span: Span) -> tuple[str, int]:
-    return span.start, 0 if span.parent_id is None else 1
+_EPOCH = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _when(value: str) -> datetime:
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return _EPOCH
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _order(span: Span) -> tuple[datetime, int, str]:
+    return _when(span.start), 0 if span.parent_id is None else 1, span.span_id
 
 
 def _payload_fields(payload: dict) -> dict:
@@ -149,14 +170,23 @@ class LiveSource:
 
     def spans(self, trace_id: str) -> list[Span]:
         spans = []
+        degraded = []
         for raw in self.client.get_raw_spans(trace_id):
             span = normalize_span(raw)
             if _is_truncated(raw.get("input")) or _is_truncated(raw.get("output")):
-                full = self.payload(trace_id, span.span_id)
+                try:
+                    full = self.payload(trace_id, span.span_id)
+                except NeatlogsError as e:
+                    degraded.append((span.span_id, e.status))
+                    spans.append(span)
+                    continue
                 span = Span(span.span_id, span.parent_id, span.name, span.kind, span.start,
                             full["input"] if _is_truncated(raw.get("input")) else span.input,
                             full["output"] if _is_truncated(raw.get("output")) else span.output)
             spans.append(span)
+        if degraded:
+            log.warning("trace %s: payload fetch failed for %d truncated span(s), using previews: %s",
+                        trace_id, len(degraded), degraded)
         return sorted(spans, key=_order)
 
     def payload(self, trace_id: str, span_id: str) -> dict:

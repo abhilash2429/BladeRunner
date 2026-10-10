@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from watchdog.neatlogs_client import NeatlogsError
 from watchdog.trace_source import (
     FrozenSource,
     LiveSource,
@@ -164,3 +165,45 @@ def test_live_source_lists_and_siblings():
     assert src.sibling_traces("r1") == ["t1"]
     assert client.kwargs["session_id"] == "r1"
     assert src.trace_info("t1").agent == "day1_agent"
+
+
+def test_text_of_wrapper_without_value_is_empty():
+    assert text_of({"mimeType": "application/json", "preview": None, "truncated": False}) == ""
+    assert text_of({"available": False, "truncated": False}) == ""
+    assert text_of({"mimeType": None}) == ""
+
+
+def test_live_source_falls_back_to_preview_when_payload_fails(caplog):
+    raw = json.loads(json.dumps(recorded("raw_spans.json")["spans"]))
+    raw[1]["input"] = {"mimeType": "application/json", "preview": '{"tool":"day1_notes_wri', "truncated": True}
+    raw[1]["output"] = {"mimeType": "application/json", "preview": '"o', "truncated": True}
+
+    class Failing(FakeClient):
+        def get_payload(self, trace_id, span_id, fields=("input", "output")):
+            raise NeatlogsError(403, "forbidden")
+
+    with caplog.at_level("WARNING"):
+        spans = LiveSource(Failing(raw)).spans("t1")
+    assert spans[1].input == '{"tool":"day1_notes_wri' and spans[1].output == '"o'
+    assert len([r for r in caplog.records if r.levelname == "WARNING"]) == 1
+
+
+def test_tool_call_decodes_double_encoded_input():
+    inner = {"tool": "fetch", "target_host": "h:2", "args": {"url": "u"}}
+    s = Span("s", None, "fetch", "TOOL", "", json.dumps(json.dumps(inner)), "")
+    assert tool_call(s) == {"tool": "fetch", "target_host": "h:2", "args": {"url": "u"}}
+
+
+def test_tool_call_none_for_json_string_that_is_not_json():
+    assert tool_call(Span("s", None, "chat", "LLM", "", json.dumps("hello"), "")) is None
+
+
+def test_sort_uses_parsed_time_with_span_id_tiebreak():
+    raw = [
+        {"spanId": "b", "parentSpanId": "r", "spanName": "n", "spanType": "TOOL", "startedAt": "2026-10-10T16:19:56Z"},
+        {"spanId": "a", "parentSpanId": "r", "spanName": "n", "spanType": "TOOL", "startedAt": "2026-10-10T16:19:56.000Z"},
+        {"spanId": "c", "parentSpanId": "r", "spanName": "n", "spanType": "TOOL", "startedAt": "2026-10-10T16:19:56.5Z"},
+        {"spanId": "r", "parentSpanId": None, "spanName": "n", "spanType": "WORKFLOW", "startedAt": "2026-10-10T16:19:56Z"},
+    ]
+    spans = LiveSource(FakeClient(raw)).spans("t1")
+    assert [s.span_id for s in spans] == ["r", "a", "b", "c"]
