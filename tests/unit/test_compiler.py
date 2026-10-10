@@ -82,6 +82,33 @@ def test_read_via_fetch_then_submit():
     assert "read_then_submit" in kinds(evaluate_trace(RULES, spans))
 
 
+def test_write_then_submit_is_not_read_then_submit():
+    spans = [tool_span("a", "notes_write", "127.0.0.1:8102", {"body": "x"}, "1"),
+             tool_span("b", "submit_answer", "127.0.0.1:8101", {"question_id": "q1", "answer": "1"}, "2")]
+    assert "read_then_submit" not in kinds(evaluate_trace(RULES, spans))
+
+
+def test_only_notes_service_fetch_counts_as_read():
+    submit = tool_span("b", "submit_answer", "127.0.0.1:8101", {"question_id": "q1", "answer": "1"}, "2")
+    stray = tool_span("a", "fetch", "127.0.0.1:8104", {"url": "http://127.0.0.1:8104/x"}, "1")
+    hits = evaluate_trace(RULES, [stray, submit])
+    assert kinds(hits) == ["host_allowlist"]
+    notes = tool_span("a", "fetch", "127.0.0.1:8102", {"url": "http://127.0.0.1:8102/notes"}, "1")
+    assert "read_then_submit" in kinds(evaluate_trace(RULES, [notes, submit]))
+
+
+def test_read_then_submit_uses_source_order_not_start_strings():
+    read = tool_span("a", "notes_read", "127.0.0.1:8102", {}, "2026-10-10T17:49:02.9Z")
+    submit = tool_span("b", "submit_answer", "127.0.0.1:8101", {"question_id": "q1", "answer": "1"},
+                       "2026-10-10T17:49:02.10Z")
+    assert "read_then_submit" in kinds(evaluate_trace(RULES, [read, submit]))
+
+
+def test_run_stopped_span_without_target_host_is_clean():
+    stopped = Span("s", None, "run_stopped", "TOOL", "1", json.dumps({"reason": "killed"}), "killed")
+    assert evaluate_trace(RULES, [stopped]) == []
+
+
 def test_guardrail_spans_are_ignored():
     blocked = tool_span("a", "guardrail_block", "127.0.0.1:8102", {"body": "x"}, kind="GUARDRAIL")
     assert evaluate_trace(RULES, [blocked]) == []
@@ -167,3 +194,11 @@ def test_ensure_detections_is_idempotent():
     second = ensure_detections(client, RULES, "g", kv)
     assert first == second and len(client.created) == 2
     assert set(first.values()) == {r.rule_id for r in RULES if r.kind == "empty_destination"}
+
+
+def test_changed_group_creates_fresh_detections():
+    kv, client = FakeKV(), FakeClient()
+    ensure_detections(client, RULES, "g1", kv)
+    ensure_detections(client, RULES, "g2", kv)
+    assert len(client.created) == 4
+    assert len({key for _, key in client.created}) == 4

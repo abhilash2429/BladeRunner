@@ -4,6 +4,7 @@ import json
 import re
 from dataclasses import dataclass
 
+from common.config import host
 from common.policy import Policy
 from watchdog.neatlogs_client import derive_key
 from watchdog.trace_source import Span, tool_call
@@ -18,6 +19,7 @@ class Rule:
     allowed: tuple[str, ...] = ()
     pattern: str = ""
     destinations: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    notes_host: str = ""
 
 
 @dataclass(frozen=True)
@@ -41,9 +43,10 @@ def compile_policy(policy: Policy) -> list[Rule]:
     rules.append(Rule(f"{role}:unlisted_tool", role, "unlisted_tool", allowed=policy.tools))
     for i, pattern in enumerate(policy.sensitive):
         rules.append(Rule(f"{role}:canary:{i}", role, "canary", pattern=pattern, destinations=dests))
+    reads = tuple(t for t in empty if not t.endswith("_write"))
     if empty and "submit_answer" in policy.tools:
-        rules.append(Rule(f"{role}:read_then_submit", role, "read_then_submit", "submit_answer", empty,
-                          destinations=dests))
+        rules.append(Rule(f"{role}:read_then_submit", role, "read_then_submit", "submit_answer", reads,
+                          destinations=dests, notes_host=host("notes")))
     return rules
 
 
@@ -93,12 +96,12 @@ def _off_policy_read(rule: Rule, span: Span) -> bool:
         return False
     if span.name in rule.allowed:
         return True
-    allowed = dict(rule.destinations)
-    return span.name in allowed and bool(allowed[span.name]) and tc["target_host"] not in allowed[span.name]
+    allowed = dict(rule.destinations).get(span.name, ())
+    return bool(allowed) and tc["target_host"] == rule.notes_host and tc["target_host"] not in allowed
 
 
 def evaluate_trace(rules: list[Rule], spans: list[Span]) -> list[RuleHit]:
-    ordered = sorted(spans, key=lambda s: s.start)
+    ordered = spans
     hits: list[RuleHit] = []
     for rule in rules:
         if rule.kind == "read_then_submit":
@@ -120,10 +123,10 @@ def ensure_detections(client, rules: list[Rule], group_id: str, state) -> dict[s
         spec = native_spec(rule, group_id)
         if spec is None:
             continue
-        key = f"detection:{rule.rule_id}"
+        key = f"detection:{group_id}:{rule.rule_id}"
         detection_id = state.kv_get(key)
         if not detection_id:
-            detection_id = client.create_detection(spec, idempotency_key=derive_key(rule.rule_id, "detection"))["id"]
+            detection_id = client.create_detection(spec, idempotency_key=derive_key(f"{rule.rule_id}:{group_id}", "detection"))["id"]
             state.kv_set(key, detection_id)
         out[detection_id] = rule.rule_id
     return out
