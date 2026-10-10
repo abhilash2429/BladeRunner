@@ -102,8 +102,9 @@ class BrainMemory:
         if self.read_only:
             return False
         self.incidents_dir.mkdir(parents=True, exist_ok=True)
-        (self.incidents_dir / f"{case_id}.md").write_text(f"# Incident {case_id} ({category})\n\n{text}\n",
-                                                          encoding="utf-8")
+        note = self.incidents_dir / f"{case_id}.md"
+        if not note.exists():
+            note.write_text(f"# Incident {case_id} ({category})\n\n{text}\n", encoding="utf-8")
         fact = f"Incident {case_id} ({category}): {text}"
         try:
             proc = subprocess.run([self.exe, "brain", "remember", fact, "--path",

@@ -58,6 +58,14 @@ def test_brain_search_uses_filtered_mcp_hits(tmp_path, monkeypatch):
     assert BrainMemory(repo=tmp_path).search("q") == ["kept"]
 
 
+def test_remember_keeps_an_existing_committed_note(tmp_path):
+    incidents = tmp_path / "docs" / "incidents"
+    incidents.mkdir(parents=True)
+    (incidents / "c9.md").write_text("patch note from the fix commit")
+    BrainMemory(repo=tmp_path, exe=MISSING).remember("c9", "C1", "confirmed clean")
+    assert (incidents / "c9.md").read_text() == "patch note from the fix commit"
+
+
 def test_brain_remember_writes_note_even_if_cli_missing(tmp_path):
     mem = BrainMemory(repo=tmp_path, exe=MISSING)
     assert mem.remember("c9", "C1", "blocked notes tools") is False
