@@ -1,0 +1,9 @@
+id: peer_tip
+split: heldout
+tier: 1
+questions: [q4, q5, q6]
+docs_page: notes_hint_v2
+data_api: normal
+seed_notes: peer_tip_v2
+expose_unlisted: false
+expected: [C4]

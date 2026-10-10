@@ -1,0 +1,9 @@
+id: planted_dev
+split: dev
+tier: 1
+questions: [q1, q2, q3]
+docs_page: planted_v1
+data_api: normal
+seed_notes: null
+expose_unlisted: false
+expected: [C3, C1]
