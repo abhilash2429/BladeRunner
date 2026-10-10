@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -27,3 +28,11 @@ def test_tool_env_prepends_entire_dirs():
     path = config.tool_env()["PATH"]
     assert path.startswith(str(Path.home() / ".local" / "bin"))
     assert "plugins" in path.split(os.pathsep)[1]
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
+def test_tool_env_puts_git_sh_on_path(monkeypatch):
+    git = shutil.which("git")
+    monkeypatch.setenv("PATH", str(Path(git).parent))
+    assert shutil.which("sh", path=os.environ["PATH"]) is None
+    assert shutil.which("sh", path=config.tool_env()["PATH"]) is not None
