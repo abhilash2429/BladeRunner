@@ -1,0 +1,1 @@
+"Append the line 'checked' to scratch_day1b.txt and do nothing else."

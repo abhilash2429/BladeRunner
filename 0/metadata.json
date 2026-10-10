@@ -1,0 +1,51 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4K9DRT9D50E4P6DZKP9KCEY",
+  "session_id": "ses_ed96970a2ffecp3sk38cmuGt7G",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-10T16:13:06.4481452Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "scratch_day1b.txt"
+  ],
+  "agent": "OpenCode",
+  "model": "zai.glm-5",
+  "turn_id": "6f15cb7cef09",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 63750,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 83,
+    "api_call_count": 3
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-10T16:13:06.405322Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 2,
+    "human_removed": 0,
+    "total_committed": 2,
+    "total_lines_changed": 2,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 17,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "scripts/day1/check_opencode.ps1": 17
+      }
+    }
+  ]
+}
