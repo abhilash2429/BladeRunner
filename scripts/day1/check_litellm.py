@@ -23,4 +23,5 @@ print("sonnet tool_calls:", bool(r.choices[0].message.tool_calls), r.usage)
 
 root = base.removesuffix("/v1")
 info = httpx.get(f"{root}/key/info", headers=headers, timeout=30)
-print("key/info:", info.status_code, info.text[:500])
+budget = (info.json().get("info") or {}) if info.status_code == 200 else {}
+print("key/info:", info.status_code, {k: budget.get(k) for k in ("spend", "max_budget", "budget_duration", "rpm_limit")})

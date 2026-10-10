@@ -30,7 +30,7 @@ venv_scripts = os.path.dirname(sys.executable)
 node_path = os.pathsep.join(p for p in os.environ["PATH"].split(os.pathsep) if os.path.normcase(p) != os.path.normcase(venv_scripts))
 exe = shutil.which("neatlogs", path=node_path)
 print("neatlogs CLI:", exe)
-cli_env = {k: v for k, v in os.environ.items() if k not in ("NEATLOGS_TOKEN", "NEATLOGS_API_KEY")}
+cli_env = {k: v for k, v in os.environ.items() if k not in ("NEATLOGS_TOKEN", "NEATLOGS_INGEST_KEY")}
 cli_env["NEATLOGS_HOST"] = env("NEATLOGS_HOST")
 cli_env["NEATLOGS_PROJECT_ID"] = env("NEATLOGS_PROJECT_ID")
 status = subprocess.run([exe, "auth", "status"], capture_output=True, text=True, env=cli_env)

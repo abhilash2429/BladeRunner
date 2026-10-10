@@ -1,0 +1,73 @@
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+  open workflow: spans=409 raw-spans=409
+2026-10-10 21:51:13 - neatlogs - INFO - Neatlogs SDK shutdown complete
+spans endpoint 200 after workflow end: Nones
+session/tags: day1-1791649196 ['agent:day1_agent']
+TRACE_ID 25881a8c1ca64f97bda35464386de3ba
+mcp tools: ['ping', 'whoami', 'log_trace', 'get_trace_context', 'search_traces', 'list_detections', 'get_detection_trend', 'list_detection_groups', 'create_detection_group', 'preview_detection', 'create_detection', 'triage_list', 'triage_get', 'triage_get_investigation', 'triage_list_steps', 'triage_list_versions', 'triage_get_version', 'triage_accept', 'triage_dismiss', 'triage_update_status', 'triage_update', 'triage_restore_version']
+  + Exception Group Traceback (most recent call last):
+  |   File "C:\Users\abhii\Batcave\Projects\bladerunner\scripts\day1\check_neatlogs_visibility.py", line 125, in <module>
+  |     asyncio.run(mcp_check(trace_id))
+  |   File "C:\Users\abhii\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\runners.py", line 195, in run
+  |     return runner.run(main)
+  |            ^^^^^^^^^^^^^^^^
+  |   File "C:\Users\abhii\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\runners.py", line 118, in run
+  |     return self._loop.run_until_complete(task)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "C:\Users\abhii\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\base_events.py", line 691, in run_until_complete
+  |     return future.result()
+  |            ^^^^^^^^^^^^^^^
+  |   File "C:\Users\abhii\Batcave\Projects\bladerunner\scripts\day1\check_neatlogs_visibility.py", line 110, in mcp_check
+  |     async with hc, streamable_http_client("https://ingest.neatlogs.com/mcp", http_client=hc) as (r, w):
+  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "C:\Users\abhii\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\contextlib.py", line 231, in __aexit__
+  |     await self.gen.athrow(value)
+  |   File "C:\Users\abhii\Batcave\Projects\bladerunner\.venv\Lib\site-packages\mcp\client\streamable_http.py", line 771, in streamable_http_client
+  |     anyio.create_task_group() as tg,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "C:\Users\abhii\Batcave\Projects\bladerunner\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 847, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Exception Group Traceback (most recent call last):
+    |   File "C:\Users\abhii\Batcave\Projects\bladerunner\.venv\Lib\site-packages\mcp\client\streamable_http.py", line 788, in streamable_http_client
+    |     yield read_stream, write_stream
+    |   File "C:\Users\abhii\Batcave\Projects\bladerunner\scripts\day1\check_neatlogs_visibility.py", line 111, in mcp_check
+    |     async with ClientSession(r, w) as s:
+    |                ^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\abhii\Batcave\Projects\bladerunner\.venv\Lib\site-packages\mcp\client\session.py", line 514, in __aexit__
+    |     result = await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\abhii\Batcave\Projects\bladerunner\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 847, in __aexit__
+    |     raise BaseExceptionGroup(
+    | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+    +-+---------------- 1 ----------------
+      | Traceback (most recent call last):
+      |   File "C:\Users\abhii\Batcave\Projects\bladerunner\scripts\day1\check_neatlogs_visibility.py", line 116, in mcp_check
+      |     print("get_trace_context schema:", ctx_tool.inputSchema)
+      |                                        ^^^^^^^^^^^^^^^^^^^^
+      |   File "C:\Users\abhii\Batcave\Projects\bladerunner\.venv\Lib\site-packages\pydantic\main.py", line 1105, in __getattr__
+      |     raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+      | AttributeError: 'Tool' object has no attribute 'inputSchema'. Did you mean: 'input_schema'?
+      +------------------------------------
+
+[exited with code 0]

@@ -1,0 +1,4 @@
+create regex 201 {"data":{"createdAt":"2026-10-10T16:27:35.401Z","displayName":"day1 regex notes_write","groupId":"<GROUP_ID>","groupName":"bladerunner","id":"261f759d-9f0b-49f0-8a3b-4f50dd61a397","isActive":true,"slug":"custom_regex_6qQWxLRzvl","threshold":0.5,"type":"regex","updatedAt":"2
+create conditional 400 {"code":"VALIDATION_ERROR","detail":"The public API request is invalid.","errors":[{"code":"unrecognized_keys","message":"Unknown field.","path":"config.conditions.0"}],"instance":"/api/v1/public/detections","requestId":"req_9aeacec426764a73e3018b306c8df793","retryable":false,"status":400,"title":"B
+2026-10-10 22:00:36 - neatlogs - INFO - Neatlogs SDK shutdown complete
+hit latency seconds: {} detection ids: {'regex': '261f759d-9f0b-49f0-8a3b-4f50dd61a397'}

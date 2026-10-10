@@ -1,0 +1,4 @@
+reuse regex 261f759d-9f0b-49f0-8a3b-4f50dd61a397
+create conditional 201 {"data":{"createdAt":"2026-10-10T16:33:37.305Z","displayName":"day1 conditional target_host","groupId":"<GROUP_ID>","groupName":"bladerunner","id":"3cac48fb-bfb4-4517-a88b-836452ed3fa5","isActive":true,"slug":"custom_conditional_2oDA97e2Hg","threshold":0.5,"type":"condition
+2026-10-10 22:06:38 - neatlogs - INFO - Neatlogs SDK shutdown complete
+hit latency seconds: {} detection ids: {'regex': '261f759d-9f0b-49f0-8a3b-4f50dd61a397', 'conditional': '3cac48fb-bfb4-4517-a88b-836452ed3fa5'}
