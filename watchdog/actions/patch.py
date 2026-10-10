@@ -21,7 +21,9 @@ UNTRACKED_RUNTIME = ("runs/", "bench/results/", "bench/frozen/")
 DEFAULT_TEST_CMD = ["uv", "run", "--frozen", "pytest", "tests/guardrails", "-q"]
 CASE_ID = re.compile(r"[A-Za-z0-9_-]{1,64}", re.ASCII)
 _SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", re.I)
-_SECRET_TEXT = re.compile(r"AKIA[0-9A-Z]{16}|(?i:bearer)\s+[A-Za-z0-9._~+/=-]{8,}")
+_SECRET_TEXT = re.compile(r"AKIA[0-9A-Z]{16}|(?i:bearer)\s+[A-Za-z0-9._~+/=-]{8,}|ghp_[A-Za-z0-9]{20,}"
+                          r"|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}"
+                          r"|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|BR-CANARY-[0-9a-f]{8}")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
 
 FIX_REQUEST = """# Fix request for incident {case_id}
@@ -92,9 +94,9 @@ def parse_porcelain(text: str) -> list[tuple[str, str]]:
 
 
 def redact(text: str) -> str:
-    for name, value in os.environ.items():
-        if len(value) >= 8 and _SECRET_NAME.search(name):
-            text = text.replace(value, "[redacted]")
+    values = {v for n, v in os.environ.items() if len(v) >= 8 and _SECRET_NAME.search(n)}
+    for value in sorted(values, key=len, reverse=True):
+        text = text.replace(value, "[redacted]")
     return _SECRET_TEXT.sub("[redacted]", text)
 
 
@@ -108,7 +110,7 @@ def _kill_tree(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
-def run_tree(cmd, *, cwd=None, env=None, timeout=None, **_) -> subprocess.CompletedProcess:
+def run_tree(cmd, *, cwd=None, env=None, timeout=None, reap: bool = True, **_) -> subprocess.CompletedProcess:
     group = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt"
              else {"start_new_session": True})
     with subprocess.Popen(cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
@@ -122,19 +124,31 @@ def run_tree(cmd, *, cwd=None, env=None, timeout=None, **_) -> subprocess.Comple
             except subprocess.TimeoutExpired:
                 pass
             raise
+        finally:
+            if reap and os.name != "nt":
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
     return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
 
 
+def run_git(cmd, **kw) -> subprocess.CompletedProcess:
+    return run_tree(cmd, reap=False, **kw)
+
+
 class Git:
-    def __init__(self, repo: Path, run=run_tree):
+    def __init__(self, repo: Path, run=run_git, timeout: float = 120):
         self.repo = Path(repo)
         self.run = run
+        self.timeout = timeout
 
     def __call__(self, *args: str, check: bool = True) -> str:
-        r = self.run(["git", "-c", "core.quotepath=off", *args], cwd=self.repo, capture_output=True, text=True,
-                     env=tool_env())
+        r = self.run(["git", "--literal-pathspecs", "-c", "core.quotepath=off", *args], cwd=self.repo,
+                     capture_output=True, text=True, env=tool_env(), timeout=self.timeout)
         if check and r.returncode != 0:
-            raise RuntimeError(f"git {args[0]} failed: {r.stderr[-300:]}")
+            sub = next((a for a in args if not a.startswith("-")), "")
+            raise RuntimeError(f"git {sub} failed: {redact(r.stderr)[-300:]}")
         return r.stdout
 
     def changes(self) -> list[tuple[str, str]]:
@@ -192,14 +206,18 @@ def checkpoint_id(git: Git, sha: str) -> str | None:
 def write_fix_request(case, findings, policy_text: str, memory_hits: list[str], out_dir: Path,
                       previous_failure: str | None = None, evidence: str = "") -> Path:
     catalog = load_catalog()
-    lines = [f"- {f.category} ({catalog.get(f.category, {}).get('name', f.category)}): {f.claim} [evidence spans: "
-             f"{', '.join(f.evidence_span_ids)}]" for f in findings if f.verdict == "upheld"]
+    lines = [f"- {f.category} ({catalog.get(f.category, {}).get('name', f.category)}): "
+             f"{_CONTROL.sub(' ', f.claim)} [evidence spans: {', '.join(f.evidence_span_ids)}]"
+             for f in findings if f.verdict == "upheld"]
     previous = (f"\n## Previous attempt failed\n{previous_failure}\nFix that this time.\n"
                 if previous_failure else "")
+    body = evidence.strip() or "none"
+    fence = "`" * max(3, max((len(m) for m in re.findall(r"`+", body)), default=0) + 1)
     text = FIX_REQUEST.format(case_id=case.case_id, agent=case.agent, trace_id=case.trace_id,
                               findings="\n".join(lines) or "- (no upheld findings)", role=role_of(case.agent),
-                              evidence=evidence.strip() or "none", policy_text=policy_text.strip(),
-                              memory="\n".join(f"- {h[:500]}" for h in memory_hits) or "none", previous=previous)
+                              evidence=f"{fence}\n{body}\n{fence}", policy_text=policy_text.strip(),
+                              memory="\n".join(f"- {redact(_CONTROL.sub(' ', h))[:500]}" for h in memory_hits)
+                              or "none", previous=previous)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{case.case_id}.md"
@@ -231,7 +249,7 @@ class OpenCodeRunner:
             return -1, "timeout"
         except OSError as e:
             return -1, type(e).__name__
-        return r.returncode, ((r.stdout or "") + (r.stderr or ""))[-2000:]
+        return r.returncode, redact((r.stdout or "") + (r.stderr or ""))[-2000:]
 
 
 class Patcher:
@@ -240,7 +258,7 @@ class Patcher:
         self.repo = Path(repo)
         self.runner = runner or OpenCodeRunner()
         self.run = run
-        self.git = Git(self.repo, run)
+        self.git = Git(self.repo, run_git if run is run_tree else run)
         self.test_cmd = list(test_cmd)
         self.why_cmd = list(why_cmd)
         self.fixreq_dir = Path(fixreq_dir) if fixreq_dir else RUNS_DIR / "fixreq"
@@ -263,7 +281,7 @@ class Patcher:
                          timeout=60)
         except (OSError, subprocess.SubprocessError):
             return ""
-        return ((r.stdout or "") or (r.stderr or ""))[-3000:]
+        return redact((r.stdout or "") or (r.stderr or ""))[-3000:]
 
     def _irregular(self, paths: list[str]) -> list[str]:
         return [p for p in paths
@@ -310,11 +328,11 @@ class Patcher:
         rel = f"docs/incidents/{case.case_id}.md"
         ups = [f for f in findings if f.verdict == "upheld"]
         cats = ", ".join(sorted({f.category for f in ups})) or "unclassified"
-        summary = "; ".join(f"{f.category}: {_CONTROL.sub(' ', f.claim).strip()[:300]}" for f in ups)
+        summary = "; ".join(f"{f.category}: {redact(_CONTROL.sub(' ', f.claim)).strip()[:300]}" for f in ups)
         note = self.repo / rel
         note.parent.mkdir(parents=True, exist_ok=True)
-        note.write_text(f"# Incident {case.case_id} ({cats})\n\nAgent {case.agent}: "
-                        f"{summary or 'no upheld findings'}. Guardrail patched in {', '.join(paths)}.\n",
+        note.write_text(redact(f"# Incident {case.case_id} ({cats})\n\nAgent {case.agent}: "
+                               f"{summary or 'no upheld findings'}. Guardrail patched in {', '.join(paths)}.\n"),
                         encoding="utf-8")
         return rel
 
@@ -330,10 +348,16 @@ class Patcher:
         self.git("commit", "-q", "-m", message, "--", *paths, note)
         return self.git("rev-parse", "HEAD").strip()
 
+    def _head(self) -> str | None:
+        try:
+            return self.git("rev-parse", "HEAD").strip()
+        except Exception:
+            return None
+
     def _attempt(self, case, findings, code: int, out: str, role: str) -> tuple[str, PatchResult | None]:
         paths = self._changed_paths()
         if code != 0:
-            return f"opencode exited {code}: {out[-400:]}", None
+            return f"opencode exited {code}: {redact(out)[-400:]}", None
         if not paths:
             return "no files changed", None
         if bad := path_violations(paths, role):
@@ -345,13 +369,16 @@ class Patcher:
         before = self._snapshot(paths)
         ok, test_out = self._tests()
         if not ok:
-            return f"guardrail tests failed: {test_out[-400:]}", None
-        if self._changed_paths() != paths or self._snapshot(paths) != before:
+            return f"guardrail tests failed: {redact(test_out)[-400:]}", None
+        if sorted(self._changed_paths()) != sorted(paths) or self._snapshot(paths) != before:
             return "files changed during guardrail tests", None
+        head = self._head()
         try:
             sha = self._commit(case, findings, paths)
-        except RuntimeError as e:
-            return f"commit failed: {str(e)[-300:]}", PatchResult(False, None, "", 0, paths=paths)
+        except Exception as e:
+            sha = self._head()
+            if not sha or sha == head:
+                return f"commit failed: {redact(str(e))[-300:]}", PatchResult(False, None, "", 0, paths=paths)
         try:
             location = first_changed_line(self.git, sha, paths)
             checkpoint = checkpoint_id(self.git, sha)
@@ -365,14 +392,14 @@ class Patcher:
             return self._patch(case, findings, policy_text, memory_hits, evidence)
 
     def _patch(self, case, findings, policy_text: str, memory_hits: list[str], evidence: str) -> PatchResult:
-        if not CASE_ID.fullmatch(str(case.case_id)):
-            return PatchResult(False, None, "invalid case id", 0)
         try:
+            if not CASE_ID.fullmatch(str(case.case_id)):
+                return PatchResult(False, None, "invalid case id", 0)
             if self.git.changes():
                 return PatchResult(False, None, "working tree not clean before patch", 0)
+            role = role_of(case.agent)
         except Exception as e:
             return PatchResult(False, None, f"internal error: {type(e).__name__}", 0)
-        role = role_of(case.agent)
         reason: str | None = None
         for attempt in (1, 2):
             try:

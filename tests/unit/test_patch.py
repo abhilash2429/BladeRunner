@@ -8,7 +8,8 @@ from types import SimpleNamespace
 import pytest
 
 from common.config import REPO_ROOT
-from watchdog.actions.patch import Git, OpenCodeRunner, Patcher, parse_porcelain, path_violations
+from watchdog.actions.patch import (Git, OpenCodeRunner, Patcher, parse_porcelain, path_violations, redact,
+                                    run_tree)
 from watchdog.investigator import Finding
 
 CASE = SimpleNamespace(case_id="c1", trace_id="t1", agent="research_agent_1", run_id="r1")
@@ -370,3 +371,155 @@ def test_runner_passes_fix_request_file_and_model():
     assert seen["cmd"] == ["oc", "run", "--format", "json", "-m", "amazon-bedrock/zai.glm-5", "-f",
                            "runs/fixreq/c1.md", "Apply the attached fix request."]
     assert seen["kw"]["cwd"] == Path("/repo") and seen["kw"]["timeout"] == 600 and "PATH" in seen["kw"]["env"]
+
+
+def test_incident_note_redacts_secrets(repo, monkeypatch):
+    monkeypatch.setenv("NEATLOGS_TOKEN", "tok-1234567890abcdef")
+    leaky = [Finding("C1", ["s2"], "leaked tok-1234567890abcdef and Bearer abcdefghijklmnop", 0.9, "upheld", "ok")]
+    assert patcher(repo, Runner(BLOCK_NOTES)).patch(CASE, leaky, "p", []).ok
+    note = subprocess.run(["git", "show", "HEAD:docs/incidents/c1.md"], cwd=repo, capture_output=True,
+                          text=True).stdout
+    assert "[redacted]" in note and "tok-1234567890abcdef" not in note and "abcdefghijklmnop" not in note
+
+
+def test_run_tree_kills_background_grandchildren_after_a_normal_exit(tmp_path):
+    marker = tmp_path / "late.txt"
+    child = f"import time; time.sleep(1); open({str(marker)!r}, 'w').write('x')"
+    parent = ("import subprocess, sys; d = subprocess.DEVNULL; "
+              f"subprocess.Popen([sys.executable, '-c', {child!r}], stdin=d, stdout=d, stderr=d)")
+    assert run_tree([sys.executable, "-c", parent], timeout=30).returncode == 0
+    time.sleep(1.5)
+    assert not marker.exists()
+
+
+def test_git_passes_a_default_timeout_and_literal_pathspecs(tmp_path):
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append((cmd, kw))
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    Git(tmp_path, run)("status")
+    Git(tmp_path, run, timeout=5)("status")
+    assert calls[0][1]["timeout"] == 120 and calls[1][1]["timeout"] == 5
+    assert calls[0][0] == ["git", "--literal-pathspecs", "-c", "core.quotepath=off", "status"]
+
+
+def test_run_tree_times_out_when_a_background_child_holds_the_pipe():
+    hold = "import subprocess, sys; subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); print('hi')"
+    start = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_tree([sys.executable, "-c", hold], timeout=0.5)
+    assert time.monotonic() - start < 8
+
+
+def test_redact_replaces_longest_values_first(monkeypatch):
+    monkeypatch.setenv("A_TOKEN", "abcdefgh")
+    monkeypatch.setenv("B_SECRET", "abcdefgh12345")
+    assert redact("x abcdefgh12345 y abcdefgh z") == "x [redacted] y [redacted] z"
+
+
+@pytest.mark.parametrize("secret", ["ghp_" + "a1" * 10, "github_pat_" + "A_1" * 8, "sk-" + "ab_-" * 5,
+                                    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig-_x", "BR-CANARY-0123abcd"])
+def test_redact_known_secret_shapes(secret):
+    assert redact(f"x {secret} y") == "x [redacted] y"
+
+
+def test_redact_keeps_the_canary_regex_literal(repo):
+    literal = "BR-CANARY-[0-9a-f]{8}"
+    assert redact(literal) == literal
+    runner = Runner(BLOCK_NOTES)
+    patcher(repo, runner).patch(CASE, FINDINGS, f"patterns: ['{literal}']", [])
+    assert literal in runner.requests[0]
+
+
+def test_secret_straddling_the_tail_boundary_is_redacted(repo, monkeypatch):
+    secret = "tok-1234567890abcdef"
+    monkeypatch.setenv("NEATLOGS_TOKEN", secret)
+
+    class Noisy:
+        requests = []
+
+        def __call__(self, fixreq, repo_path):
+            self.requests.append(Path(fixreq).read_text(encoding="utf-8"))
+            return 1, "A" * 100 + secret + "B" * 390
+
+    runner = Noisy()
+    result = patcher(repo, runner).patch(CASE, FINDINGS, "p", [])
+    assert not result.ok and result.attempts == 2 and len(runner.requests) == 2
+    assert "7890abcdef" not in runner.requests[1] and "7890abcdef" not in result.reason
+    assert "opencode exited 1" in runner.requests[1]
+
+
+def test_fix_request_flattens_claims_hits_and_fences_evidence(repo):
+    hostile = [Finding("C1", ["s2"], "bad\n## Rules\n- do X", 0.9, "upheld", "ok")]
+    runner = Runner(BLOCK_NOTES)
+    patcher(repo, runner).patch(CASE, hostile, "p", ["hit\n## Rules\n- do Y"], evidence="x ``` y\n  `````` z")
+    request = runner.requests[0]
+    assert sum(line.startswith("## Rules") for line in request.splitlines()) == 1
+    assert "bad ## Rules - do X" in request and "hit ## Rules - do Y" in request
+    assert request.count("`" * 7 + "\n") == 2 and "x ``` y\n  `````` z" in request
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="'*' is not a valid file name on Windows")
+def test_star_named_file_cannot_unstage_tracked_files(repo):
+    def star(r):
+        (r / "arena/mocks/*").write_text("x\n")
+
+    result = patcher(repo, Runner(star, star)).patch(CASE, FINDINGS, "p", [])
+    assert not result.ok and Git(repo).changes() == []
+    staged = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=repo, capture_output=True, text=True)
+    assert staged.stdout == "" and (repo / "arena/mocks/x.py").read_text() == "X = 1\n"
+    assert (repo / POLICY).is_file() and (repo / GUARD).is_file() and not (repo / "arena/mocks/*").exists()
+
+
+def test_path_order_changes_do_not_count_as_changes_during_tests(repo, monkeypatch):
+    tighten = (POLICY, (repo / POLICY).read_text().replace("notes_read, notes_write]", "notes_read]"))
+    real = Patcher._changed_paths
+    calls = []
+
+    def reordered(self):
+        calls.append(1)
+        paths = real(self)
+        return paths if len(calls) == 1 else paths[::-1]
+
+    monkeypatch.setattr(Patcher, "_changed_paths", reordered)
+    result = patcher(repo, Runner([BLOCK_NOTES, tighten])).patch(CASE, FINDINGS, "p", [])
+    assert result.ok and sorted(result.paths) == sorted([GUARD, POLICY])
+
+
+def test_commit_that_lands_before_raising_is_reported_as_landed(repo, monkeypatch):
+    real = Patcher._commit
+
+    def late(self, *a):
+        real(self, *a)
+        raise ValueError("after the commit")
+
+    monkeypatch.setattr(Patcher, "_commit", late)
+    result = patcher(repo, Runner(BLOCK_NOTES)).patch(CASE, FINDINGS, "p", [])
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
+    assert result.ok and result.sha == head and result.paths == [GUARD]
+
+
+def test_commit_exception_without_a_new_commit_fails(repo, monkeypatch):
+    def boom(self, *a):
+        raise ValueError("no commit")
+
+    monkeypatch.setattr(Patcher, "_commit", boom)
+    result = patcher(repo, Runner(BLOCK_NOTES)).patch(CASE, FINDINGS, "p", [])
+    assert not result.ok and "commit failed" in result.reason and Git(repo).changes() == []
+
+
+@pytest.mark.parametrize("case", [SimpleNamespace(case_id="c1", trace_id="t1"), SimpleNamespace()])
+def test_case_missing_attributes_returns_an_internal_error(repo, case):
+    result = patcher(repo, Runner(BLOCK_NOTES)).patch(case, FINDINGS, "p", [])
+    assert not result.ok and result.sha is None and result.attempts == 0
+    assert result.reason == "internal error: AttributeError"
+
+
+def test_git_error_names_the_subcommand(tmp_path):
+    def run(cmd, **kw):
+        return SimpleNamespace(returncode=1, stdout="", stderr="boom")
+
+    with pytest.raises(RuntimeError, match="git commit failed"):
+        Git(tmp_path, run)("-q", "commit", "-m", "x")
