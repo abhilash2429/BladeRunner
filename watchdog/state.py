@@ -12,7 +12,7 @@ import duckdb
 TRANSITIONS: dict[str, set[str]] = {
     "flagged": {"paused"},
     "paused": {"investigating"},
-    "investigating": {"investigated"},
+    "investigating": {"investigated", "needs_review"},
     "investigated": {"verified", "needs_review", "dismissed"},
     "dismissed": {"flagged"},
     "verified": {"quarantined", "quarantine_failed"},
@@ -212,3 +212,9 @@ class WatchdogState:
 
     def kv_set(self, key: str, value: str) -> None:
         self._exec("INSERT OR REPLACE INTO kv VALUES (?, ?)", (key, value))
+
+    def kv_delete(self, key: str) -> None:
+        self._exec("DELETE FROM kv WHERE key = ?", (key,))
+
+    def kv_keys(self, prefix: str) -> list[str]:
+        return [r["key"] for r in self._rows("SELECT key FROM kv WHERE starts_with(key, ?) ORDER BY key", (prefix,))]

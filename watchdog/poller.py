@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from common.policy import role_of
 from watchdog.compiler import Rule, evaluate_trace
+
+PENDING = "pending:"
 
 
 @dataclass
@@ -14,43 +16,50 @@ class Flag:
     agent: str | None
     source: str
     hits: list[dict]
+    marks: list[tuple[str, str]] = field(default_factory=list)
 
 
 class Poller:
     def __init__(self, source, state, client=None, window: timedelta = timedelta(minutes=30),
-                 now=lambda: datetime.now(timezone.utc)):
+                 now=lambda: datetime.now(timezone.utc), pending_max_age: timedelta = timedelta(hours=6)):
         self.source = source
         self.state = state
         self.client = client
         self.window = window
         self.now = now
+        self.pending_max_age = pending_max_age
         self.rules_by_role: dict[str, list[Rule]] = {}
         self.detections: dict[str, str] = {}
+        self._errored = False
 
     def _skip(self, info) -> bool:
         return bool(info.session_id and self.state.kv_get(f"confirm_session:{info.session_id}"))
 
     def _record_error(self, e: Exception) -> None:
+        self._errored = True
         self.state.kv_set("last_poll_error", f"{type(e).__name__}: {e}"[:300])
 
     def _poll_detection(self, detection_id: str, rule_id: str, flags: list[Flag]) -> None:
         cursor = None
         visited: set[str] = set()
+        taken: set[str] = set()
         while True:
             hits, next_cursor = self.client.list_hits(detection_id, cursor)
             for h in hits:
-                if self.state.kv_get(f"hit:{h['id']}"):
+                key = f"hit:{h['id']}"
+                if h["id"] in taken or self.state.kv_get(key):
                     continue
                 try:
                     info = self.source.trace_info(h["traceId"])
                 except Exception as e:
                     self._record_error(e)
                     continue
-                self.state.kv_set(f"hit:{h['id']}", "1")
+                taken.add(h["id"])
                 if not info.agent or self._skip(info):
+                    self.state.kv_set(key, "1")
                     continue
                 flags.append(Flag(info.trace_id, info.session_id, info.agent, "native",
-                                  [{"rule_id": rule_id, "span_id": h["spanId"]}]))
+                                  [{"rule_id": rule_id, "span_id": h["spanId"]}], [(key, "1")]))
             if not next_cursor or next_cursor in visited:
                 return
             visited.add(next_cursor)
@@ -67,29 +76,64 @@ class Poller:
                 self._record_error(e)
         return flags
 
+    def _track_pending(self, trace_id: str) -> None:
+        key = PENDING + trace_id
+        first = self.state.kv_get(key)
+        if first is None:
+            self.state.kv_set(key, self.now().isoformat())
+        elif self.now() - datetime.fromisoformat(first) > self.pending_max_age:
+            self.state.kv_delete(key)
+            self._record_error(TimeoutError(f"trace {trace_id} still not finalized, dropped"))
+
+    def _consider(self, info, flags: list[Flag]) -> None:
+        if not info.agent or self._skip(info):
+            self.state.kv_delete(PENDING + info.trace_id)
+            return
+        if info.finalization != "finalized":
+            self._track_pending(info.trace_id)
+            return
+        key, marker = f"seen:{info.trace_id}", f"{info.spans_count}:{info.finalization}"
+        if self.state.kv_get(key) == marker:
+            self.state.kv_delete(PENDING + info.trace_id)
+            return
+        try:
+            spans = self.source.spans(info.trace_id)
+        except Exception as e:
+            self._record_error(e)
+            return
+        try:
+            hits = evaluate_trace(self.rules_by_role.get(role_of(info.agent), []), spans)
+        except Exception as e:
+            self._record_error(e)
+            hits = []
+        if hits:
+            flags.append(Flag(info.trace_id, info.session_id, info.agent, "local",
+                              [{"rule_id": h.rule_id, "span_id": h.span_id} for h in hits], [(key, marker)]))
+            return
+        self.state.kv_set(key, marker)
+        self.state.kv_delete(PENDING + info.trace_id)
+
     def sweep(self) -> list[Flag]:
         now = self.now()
         flags: list[Flag] = []
+        listed: set[str] = set()
         for info in self.source.list_traces(now - self.window, now):
-            if info.finalization != "finalized" or not info.agent or self._skip(info):
-                continue
-            marker = f"{info.spans_count}:{info.finalization}"
-            key = f"seen:{info.trace_id}"
-            if self.state.kv_get(key) == marker:
+            listed.add(info.trace_id)
+            self._consider(info, flags)
+        for key in self.state.kv_keys(PENDING):
+            trace_id = key[len(PENDING):]
+            if trace_id in listed:
                 continue
             try:
-                hits = evaluate_trace(self.rules_by_role.get(role_of(info.agent), []),
-                                      self.source.spans(info.trace_id))
+                info = self.source.trace_info(trace_id)
             except Exception as e:
                 self._record_error(e)
                 continue
-            self.state.kv_set(key, marker)
-            if hits:
-                flags.append(Flag(info.trace_id, info.session_id, info.agent, "local",
-                                  [{"rule_id": h.rule_id, "span_id": h.span_id} for h in hits]))
+            self._consider(info, flags)
         return flags
 
     def tick(self) -> list[str]:
+        self._errored = False
         changed: list[str] = []
         try:
             native = self.poll_native()
@@ -102,7 +146,18 @@ class Poller:
             self._record_error(e)
             local = []
         for flag in native + local:
-            case, is_changed = self.state.open_case(flag.trace_id, flag.run_id, flag.agent, flag.source, flag.hits)
+            try:
+                case, is_changed = self.state.open_case(flag.trace_id, flag.run_id, flag.agent, flag.source,
+                                                        flag.hits)
+            except Exception as e:
+                self._record_error(e)
+                continue
+            for key, value in flag.marks:
+                self.state.kv_set(key, value)
+            if flag.source == "local":
+                self.state.kv_delete(PENDING + flag.trace_id)
             if is_changed and case.case_id not in changed:
                 changed.append(case.case_id)
+        if not self._errored and self.state.kv_get("last_poll_error"):
+            self.state.kv_set("last_poll_error", "")
         return changed

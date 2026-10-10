@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from common.policy import load_policy
 from watchdog.compiler import compile_policy
@@ -77,7 +77,7 @@ def test_sweep_flags_only_violating_trace(tmp_path):
 
 def test_sweep_skips_unchanged_traces(tmp_path):
     p, _ = make(tmp_path)
-    p.sweep()
+    p.tick()
     calls = p.source.span_calls
     assert p.sweep() == [] and p.source.span_calls == calls
 
@@ -89,6 +89,7 @@ def test_native_hits_dedupe(tmp_path):
     p.detections = {"det-1": "research_agent:empty_destination:notes_write"}
     flags = p.poll_native()
     assert [f.trace_id for f in flags] == ["t_bad"] and flags[0].source == "native"
+    p.tick()
     assert p.poll_native() == []
 
 
@@ -108,8 +109,7 @@ def test_sweep_retries_trace_after_source_error(tmp_path):
     first = p.sweep()
     assert first == [] and st.kv_get("seen:t_bad") is None
     assert st.kv_get("last_poll_error").startswith("RuntimeError")
-    second = p.sweep()
-    assert [f.trace_id for f in second] == ["t_bad"]
+    assert p.tick() and st.case_for_trace("t_bad") is not None
     assert p.sweep() == []
 
 
@@ -120,6 +120,7 @@ def test_native_hit_retried_after_trace_info_error(tmp_path):
     p.source.info_fail_once = {"t_bad"}
     assert p.poll_native() == [] and st.kv_get("hit:h1") is None
     assert [f.trace_id for f in p.poll_native()] == ["t_bad"]
+    p.tick()
     assert p.poll_native() == []
 
 
@@ -189,4 +190,82 @@ def test_tick_survives_list_traces_failure(tmp_path):
     p.source.list_traces = boom
     assert p.tick() == []
     assert st.kv_get("last_poll_error").startswith("RuntimeError")
+
+
+def test_clean_tick_clears_last_poll_error(tmp_path):
+    p, st = make(tmp_path)
+    st.kv_set("last_poll_error", "RuntimeError: old")
+    p.tick()
+    assert st.kv_get("last_poll_error") == ""
+
+
+def pending(info):
+    return TraceInfo(info.trace_id, info.session_id, info.agent, info.tags, info.spans_count, "pending", "")
+
+
+def test_pending_trace_is_rechecked_after_it_leaves_the_window(tmp_path):
+    p, st = make(tmp_path)
+    info, spans = p.source.traces["t_bad"]
+    p.source.traces["t_bad"] = (pending(info), spans)
+    p.tick()
+    assert st.kv_keys("pending:") == ["pending:t_bad"]
+    p.source.traces["t_bad"] = (info, spans)
+    p.source.list_traces = lambda since, until: []
+    assert p.tick() and st.case_for_trace("t_bad") is not None
+    assert st.kv_keys("pending:") == []
+
+
+def test_clean_pending_trace_is_dropped_once_evaluated(tmp_path):
+    p, st = make(tmp_path)
+    info, spans = p.source.traces["t_ok"]
+    p.source.traces["t_ok"] = (pending(info), spans)
+    p.tick()
+    p.source.traces["t_ok"] = (info, spans)
+    p.source.list_traces = lambda since, until: []
+    p.tick()
+    assert st.kv_keys("pending:") == [] and st.kv_get("seen:t_ok") == "1:finalized"
+
+
+def test_pending_trace_is_dropped_after_max_age(tmp_path):
+    p, st = make(tmp_path)
+    clock = {"now": NOW}
+    p.now = lambda: clock["now"]
+    info, spans = p.source.traces["t_bad"]
+    p.source.traces["t_bad"] = (pending(info), spans)
+    p.tick()
+    clock["now"] = NOW + p.pending_max_age + timedelta(minutes=1)
+    p.source.list_traces = lambda since, until: []
+    p.tick()
+    assert st.kv_keys("pending:") == [] and "not finalized" in st.kv_get("last_poll_error")
+
+
+def test_failed_open_case_leaves_trace_unmarked_and_retries(tmp_path):
+    p, st = make(tmp_path)
+    real = st.open_case
+    calls = {"n": 0}
+
+    def flaky(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("duckdb busy")
+        return real(*args, **kwargs)
+
+    st.open_case = flaky
+    assert p.tick() == [] and st.kv_get("seen:t_bad") is None
+    assert p.tick() and st.case_for_trace("t_bad") is not None
+    assert st.kv_get("seen:t_bad") == "2:finalized"
+
+
+def test_evaluation_error_marks_trace_seen_without_refetching(tmp_path, monkeypatch):
+    p, st = make(tmp_path)
+
+    def broken(rules, spans):
+        raise ValueError("bad rule")
+
+    monkeypatch.setattr("watchdog.poller.evaluate_trace", broken)
+    p.tick()
+    calls = p.source.span_calls
+    assert st.kv_get("seen:t_bad") == "2:finalized" and st.kv_get("last_poll_error").startswith("ValueError")
+    p.tick()
+    assert p.source.span_calls == calls
 
