@@ -4,5 +4,6 @@
     "primary": {
       "type": "git-refs"
     }
-  }
+  },
+  "commit_linking": "always"
 }
