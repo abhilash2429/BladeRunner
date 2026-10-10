@@ -50,12 +50,12 @@ with _rest.client() as c:
         r = c.get("/traces", params={"from": start.isoformat().replace("+00:00", "Z"),
                                      "workflowName": "day1-visibility", "limit": 50})
         body = r.json()
-        if first_trace is None:
-            _rest.save("traces_list", body)
         items = (body.get("data") or {}).get("traces") or (body.get("data") or {}).get("items") or []
         for t in items:
             if t.get("sessionId") == session or trace_id is None:
                 trace_id = t.get("traceId") or t.get("id")
+        if first_trace is None and any(t.get("sessionId") == session for t in items):
+            _rest.save("traces_list", body)
         if trace_id and first_trace is None:
             first_trace = time.time() - t0
         if trace_id:
@@ -93,7 +93,7 @@ with _rest.client() as c:
         span_items = (spans.get("data") or {}).get("spans") or []
         for s in span_items:
             sid = s.get("spanId") or s.get("id")
-            if "day1_notes_write" in str(s.get("name")):
+            if "day1_notes_write" in str(s.get("spanName")):
                 payload = c.get(f"/traces/{trace_id}/spans/{sid}/payload", params={"fields": "input,output"})
                 _rest.save("payload", payload.json())
                 print("tool span raw keys:", list(s.keys()))
