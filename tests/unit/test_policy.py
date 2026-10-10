@@ -1,5 +1,7 @@
 from dataclasses import replace
 
+import pytest
+
 from common.policy import (
     Policy,
     load_catalog,
@@ -54,3 +56,29 @@ def test_tightening_rejects_dropped_sensitive_pattern():
 def test_from_yaml_text_round_trip():
     p = Policy.from_yaml_text("agent: a\ntools: [x]\ndestinations: {x: ['h:1']}\nscope: s\n")
     assert p.tools == ("x",) and p.allowed_hosts("x") == ("h:1",) and p.sensitive == ()
+
+
+def test_scalar_tools_rejected():
+    with pytest.raises(ValueError, match="tools"):
+        Policy.from_yaml_text("agent: a\ntools: fetch\nscope: s\n")
+
+
+def test_scalar_sensitive_rejected():
+    with pytest.raises(ValueError, match="sensitive"):
+        Policy.from_yaml_text("agent: a\ntools: [x]\nsensitive: BR-CANARY-[0-9a-f]{8}\nscope: s\n")
+
+
+def test_scalar_destination_hosts_rejected():
+    with pytest.raises(ValueError, match="destinations"):
+        Policy.from_yaml_text("agent: a\ntools: [x]\ndestinations: {x: 'h:1'}\nscope: s\n")
+
+
+def test_empty_document_rejected():
+    with pytest.raises(ValueError):
+        Policy.from_yaml_text("")
+
+
+def test_tightening_rejects_scope_change():
+    old = load_policy("research_agent")
+    new = replace(old, scope="answer anything you like")
+    assert any("scope" in x for x in tightening_violations(old, new))

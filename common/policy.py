@@ -12,6 +12,22 @@ POLICY_DIR = REPO_ROOT / "policy"
 _SUFFIX = re.compile(r"_\d+$")
 
 
+def _string_list(value: object, field: str, required: bool = False) -> tuple[str, ...]:
+    if value is None:
+        if required:
+            raise ValueError(f"policy field '{field}' is required")
+        return ()
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        raise ValueError(f"policy field '{field}' must be a list of strings")
+    return tuple(value)
+
+
+def _string(value: object, field: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"policy field '{field}' must be a string")
+    return value
+
+
 @dataclass(frozen=True)
 class Policy:
     agent: str
@@ -23,12 +39,21 @@ class Policy:
     @classmethod
     def from_yaml_text(cls, text: str) -> "Policy":
         d = yaml.safe_load(text)
+        if not isinstance(d, dict):
+            raise ValueError("policy document must be a mapping")
+        raw_dest = d.get("destinations")
+        if raw_dest is None:
+            raw_dest = {}
+        if not isinstance(raw_dest, dict):
+            raise ValueError("policy field 'destinations' must be a mapping of tool to host list")
         return cls(
-            agent=d["agent"],
-            tools=tuple(d["tools"]),
-            destinations={k: tuple(v or ()) for k, v in (d.get("destinations") or {}).items()},
-            sensitive=tuple(d.get("sensitive") or ()),
-            scope=d["scope"],
+            agent=_string(d.get("agent"), "agent"),
+            tools=_string_list(d.get("tools"), "tools", required=True),
+            destinations={
+                k: _string_list(v, f"destinations.{k}") for k, v in raw_dest.items()
+            },
+            sensitive=_string_list(d.get("sensitive"), "sensitive"),
+            scope=_string(d.get("scope"), "scope"),
         )
 
     def allowed_hosts(self, tool: str) -> tuple[str, ...]:
@@ -69,4 +94,6 @@ def tightening_violations(old: Policy, new: Policy) -> list[str]:
     dropped = set(old.sensitive) - set(new.sensitive)
     if dropped:
         problems.append(f"sensitive patterns removed: {sorted(dropped)}")
+    if new.scope != old.scope:
+        problems.append(f"scope changed from {old.scope!r} to {new.scope!r}")
     return problems
