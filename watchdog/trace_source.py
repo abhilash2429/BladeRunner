@@ -42,16 +42,18 @@ def _first(d: dict, *keys, default=None):
     return default
 
 
+def _is_io_wrapper(value: dict) -> bool:
+    return any(k in value for k in _WRAPPER_KEYS) and ("preview" in value or "value" in value)
+
+
 def text_of(value) -> str:
     if value is None:
         return ""
     if isinstance(value, str):
         return value
-    if isinstance(value, dict) and any(k in value for k in _WRAPPER_KEYS):
-        for key in ("preview", "value"):
-            if isinstance(value.get(key), str):
-                return value[key]
-        return ""
+    if isinstance(value, dict) and _is_io_wrapper(value):
+        inner = _first(value, "preview", "value")
+        return "" if inner is None else inner if isinstance(inner, str) else json.dumps(inner)
     return json.dumps(value)
 
 

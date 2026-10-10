@@ -169,8 +169,18 @@ def test_live_source_lists_and_siblings():
 
 def test_text_of_wrapper_without_value_is_empty():
     assert text_of({"mimeType": "application/json", "preview": None, "truncated": False}) == ""
-    assert text_of({"available": False, "truncated": False}) == ""
-    assert text_of({"mimeType": None}) == ""
+    assert text_of({"available": False, "truncated": False, "value": None}) == ""
+
+
+def test_text_of_plain_dict_with_wrapper_like_key_keeps_json():
+    plain = {"available": True, "target_host": "h:1"}
+    assert text_of(plain) == json.dumps(plain)
+    assert tool_call(Span("s", None, "fetch", "TOOL", "", text_of(plain), ""))["target_host"] == "h:1"
+
+
+def test_text_of_wrapper_with_dict_value_is_json_dumped():
+    inner = {"tool": "x", "target_host": "h"}
+    assert text_of({"available": True, "truncated": False, "value": inner}) == json.dumps(inner)
 
 
 def test_live_source_falls_back_to_preview_when_payload_fails(caplog):
