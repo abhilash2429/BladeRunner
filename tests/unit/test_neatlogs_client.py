@@ -165,14 +165,18 @@ def test_cli_strips_credentials_and_builds_args(monkeypatch):
 
 
 def test_cli_resolves_node_cli_without_venv_scripts(monkeypatch, tmp_path):
-    venv = tmp_path / "venv" / "Scripts"
+    windows = os.name == "nt"
+    venv = tmp_path / "venv" / ("Scripts" if windows else "bin")
     node = tmp_path / "npm"
     venv.mkdir(parents=True)
     node.mkdir()
     for d, name in ((venv, "neatlogs-sdk"), (node, "neatlogs-node")):
-        (d / "neatlogs.cmd").write_text(name)
+        exe = d / ("neatlogs.cmd" if windows else "neatlogs")
+        exe.write_text(name)
+        exe.chmod(0o755)
     monkeypatch.setattr("sys.prefix", str(tmp_path / "venv"))
-    monkeypatch.setattr("sys.executable", str(venv / "python.exe"))
+    monkeypatch.setattr("sys.executable", str(venv / ("python.exe" if windows else "python")))
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
     monkeypatch.setenv("PATH", os.pathsep.join([str(venv), str(node)]))
     monkeypatch.setenv("PATHEXT", ".CMD")
     cli = NeatlogsCLI()
