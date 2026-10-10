@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -79,6 +80,7 @@ class WatchdogState:
     def __init__(self, db_path: str):
         self.conn = duckdb.connect(db_path)
         self._lock = threading.RLock()
+        self._in_tx = False
         for stmt in SCHEMA:
             self.conn.execute(stmt)
 
@@ -91,6 +93,23 @@ class WatchdogState:
     def _exec(self, sql: str, params: tuple = ()) -> None:
         with self._lock:
             self.conn.execute(sql, params)
+
+    @contextmanager
+    def _tx(self):
+        with self._lock:
+            if self._in_tx:
+                yield
+                return
+            self.conn.execute("BEGIN TRANSACTION")
+            self._in_tx = True
+            try:
+                yield
+                self.conn.execute("COMMIT")
+            except BaseException:
+                self.conn.execute("ROLLBACK")
+                raise
+            finally:
+                self._in_tx = False
 
     @staticmethod
     def _case(row: dict) -> Case:
@@ -119,7 +138,7 @@ class WatchdogState:
         return rows
 
     def open_case(self, trace_id, run_id, agent, source, hits: list[dict]) -> tuple[Case, bool]:
-        with self._lock:
+        with self._tx():
             existing = self.case_for_trace(trace_id)
             if existing is None:
                 hits = _fresh(hits, set())
@@ -140,7 +159,7 @@ class WatchdogState:
             return self.get(existing.case_id), bool(new)
 
     def transition(self, case_id: str, to: str) -> Case:
-        with self._lock:
+        with self._tx():
             case = self.get(case_id)
             if to not in TRANSITIONS.get(case.status, set()):
                 raise InvalidTransition(f"{case.status} -> {to}")
@@ -154,14 +173,14 @@ class WatchdogState:
             return self.get(case_id)
 
     def set_findings(self, case_id: str, findings: list[dict]) -> None:
-        with self._lock:
+        with self._tx():
             self.get(case_id)
             self._exec("UPDATE cases SET findings = ?, updated_at = ? WHERE case_id = ?",
                        (json.dumps(findings), _now(), case_id))
             self.log_event(case_id, "findings", {"findings": findings})
 
     def bump_retry(self, case_id: str, kind: str) -> int:
-        with self._lock:
+        with self._tx():
             extra = self.get(case_id).extra
             retries = extra.setdefault("retries", {})
             retries[kind] = retries.get(kind, 0) + 1
@@ -170,7 +189,9 @@ class WatchdogState:
             return retries[kind]
 
     def set_extra(self, case_id: str, **kv) -> None:
-        with self._lock:
+        if "retries" in kv:
+            raise ValueError("retries is reserved for bump_retry")
+        with self._tx():
             extra = self.get(case_id).extra
             extra.update(kv)
             self._exec("UPDATE cases SET extra = ?, updated_at = ? WHERE case_id = ?",

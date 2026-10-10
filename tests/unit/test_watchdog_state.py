@@ -1,5 +1,6 @@
 import threading
 import uuid
+from dataclasses import asdict
 
 import pytest
 
@@ -171,3 +172,79 @@ def test_concurrent_open_case_creates_one_case(st):
     assert sorted(changed for _, changed in results) == [False, True]
     assert len({case.case_id for case, _ in results}) == 1
     assert len(st.all_cases()) == 1
+
+
+def _snapshot(st):
+    return [asdict(c) for c in st.all_cases()], st._rows("SELECT count(*) AS n FROM case_events")[0]["n"]
+
+
+def _fail_on(st, monkeypatch, kind):
+    original = st.log_event
+
+    def log(case_id, k, data=None):
+        if k == kind:
+            raise RuntimeError(kind)
+        return original(case_id, k, data)
+
+    monkeypatch.setattr(st, "log_event", log)
+
+
+def test_set_findings_rolls_back_when_event_fails(st, monkeypatch):
+    case, _ = st.open_case("t1", "r1", "a_1", "native", [HIT])
+    st.set_findings(case.case_id, [{"category": "C1"}])
+    before = _snapshot(st)
+    _fail_on(st, monkeypatch, "findings")
+    with pytest.raises(RuntimeError):
+        st.set_findings(case.case_id, [{"category": "C2"}])
+    assert _snapshot(st) == before
+    assert st.get(case.case_id).findings == [{"category": "C1"}]
+
+
+def test_transition_rolls_back_when_event_fails(st, monkeypatch):
+    case, _ = st.open_case("t1", "r1", "a_1", "native", [HIT])
+    before = _snapshot(st)
+    _fail_on(st, monkeypatch, "transition")
+    with pytest.raises(RuntimeError):
+        st.transition(case.case_id, "paused")
+    assert _snapshot(st) == before
+    assert st.get(case.case_id).status == "flagged"
+
+
+def test_open_case_new_rolls_back_when_event_fails(st, monkeypatch):
+    before = _snapshot(st)
+    _fail_on(st, monkeypatch, "opened")
+    with pytest.raises(RuntimeError):
+        st.open_case("t1", "r1", "a_1", "native", [HIT])
+    assert _snapshot(st) == before
+    assert st.case_for_trace("t1") is None
+
+
+def test_open_case_append_rolls_back_when_event_fails(st, monkeypatch):
+    case, _ = st.open_case("t1", "r1", "a_1", "native", [HIT])
+    before = _snapshot(st)
+    _fail_on(st, monkeypatch, "evidence")
+    with pytest.raises(RuntimeError):
+        st.open_case("t1", "r1", "a_1", "local", [HIT2])
+    assert _snapshot(st) == before
+    assert len(st.get(case.case_id).evidence) == 1
+
+
+def test_open_case_reopen_rolls_back_when_transition_event_fails(st, monkeypatch):
+    case, _ = st.open_case("t1", "r1", "a_1", "native", [HIT])
+    _to_dismissed(st, case.case_id)
+    before = _snapshot(st)
+    _fail_on(st, monkeypatch, "transition")
+    with pytest.raises(RuntimeError):
+        st.open_case("t1", "r1", "a_1", "local", [HIT2])
+    assert _snapshot(st) == before
+    got = st.get(case.case_id)
+    assert got.status == "dismissed" and len(got.evidence) == 1
+
+
+def test_set_extra_rejects_retries_key(st):
+    case, _ = st.open_case("t1", "r1", "a_1", "native", [HIT])
+    st.bump_retry(case.case_id, "patch")
+    with pytest.raises(ValueError):
+        st.set_extra(case.case_id, retries={"patch": 99})
+    assert st.get(case.case_id).extra == {"retries": {"patch": 1}}
+    assert st.bump_retry(case.case_id, "patch") == 2
