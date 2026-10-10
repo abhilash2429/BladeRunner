@@ -38,12 +38,14 @@ class Writeback:
         return False
 
     def tag(self, case, findings: list[Finding], status_tag: str, extra_add=(), remove=()) -> bool:
-        add = list(dict.fromkeys(["bladerunner", status_tag, f"incident:{case.case_id}", *extra_add,
-                                  *category_tags(findings)]))
+        own = list(dict.fromkeys(["bladerunner", status_tag, f"incident:{case.case_id}", *extra_add]))
+        if len(own) > TAG_CAP:
+            return self._tag_failed(case, "TooManyTags")
+        cats = [t for t in category_tags(findings) if t not in own]
+        room = TAG_CAP - len(own)
+        add, trimmed = own + cats[:room], cats[room:]
         remove = tuple(remove)
         name = trace_name(case.agent, findings)
-        if len(add) > TAG_CAP:
-            return self._tag_failed(case, "TooManyTags")
         key = derive_key(case.idem_key, f"tags:{status_tag}:{_payload_digest(add, remove, name)}")
         try:
             result = self.client.patch_trace(case.trace_id, add_tags=add, remove_tags=remove, trace_name=name,
@@ -53,7 +55,10 @@ class Writeback:
         final = result.get("tags") if isinstance(result, dict) else None
         if isinstance(final, list) and not all(t in final for t in add):
             return self._tag_failed(case, "TagsDropped")
-        self.state.log_event(case.case_id, "writeback_tags", {"tags": add, "removed": list(remove)})
+        data = {"tags": add, "removed": list(remove)}
+        if trimmed:
+            data["trimmed"] = trimmed
+        self.state.log_event(case.case_id, "writeback_tags", data)
         return True
 
     def _feedback_call(self, case, target: str, span_id, call) -> bool:

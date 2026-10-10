@@ -148,12 +148,25 @@ def test_tag_keeps_every_add_with_nine_existing_tags(st):
     assert len(merged) == 10 and all(t in merged for t in client.calls[0][1]["add_tags"])
 
 
-def test_tag_reports_false_when_adds_do_not_fit(st):
+def test_tag_trims_highest_categories_when_adds_exceed_cap(st):
     case = open_case(st)
     seven = [Finding(f"C{i}", ["s"], "x", 0.9, "upheld", "ok") for i in range(1, 8)]
-    client = FakeClient(existing=[])
-    assert Writeback(client, FakeCLI(), st).tag(case, seven, "verified", extra_add=["quarantined"]) is False
-    assert any(e["kind"] == "writeback_failed" for e in st.events(case.case_id))
+    client = FakeClient(existing=["agent:a_1"])
+    assert Writeback(client, FakeCLI(), st).tag(case, seven, "verified", extra_add=["quarantined"]) is True
+    add = client.calls[0][1]["add_tags"]
+    assert add == ["bladerunner", "verified", f"incident:{case.case_id}", "quarantined",
+                   *[f"cat:C{i}" for i in range(1, 7)]]
+    assert client.calls[0][1]["trace_name"] == "[BLADERUNNER C1,C2,C3,C4,C5,C6,C7] a_1"
+    tagged = [e for e in st.events(case.case_id) if e["kind"] == "writeback_tags"]
+    assert tagged[0]["data"]["trimmed"] == ["cat:C7"]
+    assert not any(e["kind"] == "writeback_failed" for e in st.events(case.case_id))
+
+
+def test_tag_event_has_no_trimmed_key_when_everything_fits(st):
+    case = open_case(st)
+    assert Writeback(FakeClient(), FakeCLI(), st).tag(case, [UP], "verified")
+    tagged = [e for e in st.events(case.case_id) if e["kind"] == "writeback_tags"]
+    assert "trimmed" not in tagged[0]["data"]
 
 
 def test_writeback_failure_is_logged_not_raised(st):
