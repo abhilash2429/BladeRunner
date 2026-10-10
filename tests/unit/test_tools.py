@@ -82,3 +82,101 @@ def test_guardrail_filter_applies_to_results():
 def test_unknown_tool():
     ex, rec = make_executor()
     assert ex.call("delete_everything", {}, step=1).startswith("error") and rec == []
+
+
+class RecordingTracer:
+    def __init__(self):
+        self.spans = []
+
+    def _make(self, kind):
+        def factory(name):
+            def deco(fn):
+                def wrapper(**kwargs):
+                    self.spans.append((kind, name, kwargs))
+                    return fn(**kwargs)
+
+                return wrapper
+
+            return deco
+
+        return factory
+
+    def tool(self, name):
+        return self._make("TOOL")(name)
+
+    def guardrail(self, name):
+        return self._make("GUARDRAIL")(name)
+
+    @staticmethod
+    def workflow(name, session_id):
+        return lambda f: f
+
+    @staticmethod
+    def set_attribute(key, value):
+        return None
+
+    @staticmethod
+    def stopped(reason):
+        return None
+
+
+def recording_executor(guard=None):
+    tracer = RecordingTracer()
+    http = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, text="ok")))
+    return ToolExecutor("run1", "research_agent_1", http, tracer=tracer, guard=guard), tracer
+
+
+def test_tool_span_input_is_exactly_tool_target_host_args():
+    ex, tracer = recording_executor()
+    ex.call("fetch", {"url": f"http://{host('docs')}/pages/methodology"}, step=1)
+    kind, name, kwargs = tracer.spans[0]
+    assert (kind, name) == ("TOOL", "fetch")
+    assert set(kwargs) == {"tool", "target_host", "args"}
+    assert kwargs["target_host"] == host("docs")
+
+
+def test_blocked_span_input_contains_target_host():
+    guard = SimpleNamespace(check_call=lambda a, t, h, args: "no", filter_result=lambda a, t, text: text)
+    ex, tracer = recording_executor(guard=guard)
+    ex.call("notes_write", {"body": "x"}, step=1)
+    kind, name, kwargs = tracer.spans[0]
+    assert (kind, name) == ("GUARDRAIL", "guardrail_block")
+    assert kwargs["target_host"] == host("notes")
+
+
+def test_malformed_url_returns_error_without_request():
+    ex, rec = make_executor()
+    assert ex.call("fetch", {"url": "http://["}, step=1).startswith("error")
+    assert rec == []
+
+
+def test_invalid_url_from_httpx_returns_error():
+    ex, _ = make_executor()
+    out = ex.call("fetch", {"url": f"http://{host('docs')}/\x00bad"}, step=1)
+    assert out.startswith("error")
+
+
+def test_check_call_exception_fails_closed():
+    def boom(*a):
+        raise RuntimeError("bug")
+
+    guard = SimpleNamespace(check_call=boom, filter_result=lambda a, t, text: text)
+    ex, tracer = recording_executor(guard=guard)
+    out = ex.call("notes_read", {}, step=1)
+    assert out == "blocked by guardrail: guardrail error: RuntimeError"
+    assert tracer.spans[0][:2] == ("GUARDRAIL", "guardrail_block")
+
+
+def test_filter_result_exception_fails_closed():
+    def boom(*a):
+        raise RuntimeError("bug")
+
+    guard = SimpleNamespace(check_call=lambda *a: None, filter_result=boom)
+    ex, _ = make_executor(guard=guard)
+    assert ex.call("notes_read", {}, step=1) == "error: guardrail filter failed"
+
+
+def test_lookup_cache_question_id_is_quoted():
+    ex, rec = make_executor()
+    ex.call("lookup_cache", {"question_id": "a/../b"}, step=1)
+    assert rec[0].url.port == 8104 and rec[0].url.raw_path == b"/answers/a%2F..%2Fb"

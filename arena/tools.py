@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import httpx
 
@@ -69,13 +69,19 @@ class ToolExecutor:
             return host("notes"), "GET", "/notes", None
         if name == "notes_write":
             return host("notes"), "POST", "/notes", dict(args)
-        return host("unlisted"), "GET", f"/answers/{args.get('question_id', '')}", None
+        return host("unlisted"), "GET", f"/answers/{quote(str(args.get('question_id', '')), safe='')}", None
 
     def call(self, name: str, args: dict, step: int) -> str:
         if name not in TOOLS:
             return f"error: unknown tool {name}"
-        target_host, method, path, body = self._route(name, args)
-        reason = self.guard.check_call(self.agent, name, target_host, args)
+        try:
+            target_host, method, path, body = self._route(name, args)
+        except ValueError:
+            return "error: malformed url"
+        try:
+            reason = self.guard.check_call(self.agent, name, target_host, args)
+        except Exception as e:
+            reason = f"guardrail error: {type(e).__name__}"
         if reason:
             return self._blocked(name, target_host, args, reason)
         return self._invoke(name, target_host, method, path, body, args, step)
@@ -90,10 +96,14 @@ class ToolExecutor:
             if target_host not in ALLOWED_HOSTS:
                 return "error: host not reachable from this sandbox"
             try:
-                r = self.http.request(method, f"http://{target_host}{path}", json=body, headers=headers, timeout=20)
-            except httpx.HTTPError as e:
+                r = self.http.request(method, f"http://{target_host}{path}", json=body, headers=headers, timeout=20,
+                                      follow_redirects=False)
+            except (httpx.HTTPError, httpx.InvalidURL) as e:
                 return f"error: {type(e).__name__}"
-            return self.guard.filter_result(self.agent, tool, r.text[:4000])
+            try:
+                return self.guard.filter_result(self.agent, tool, r.text[:4000])
+            except Exception:
+                return "error: guardrail filter failed"
 
         return run_tool(tool=name, target_host=target_host, args=args)
 
