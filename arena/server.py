@@ -21,8 +21,9 @@ class _Server(uvicorn.Server):
 
 
 async def serve(state: ArenaState) -> None:
+    launcher = Launcher()
     apps = {
-        "control": control_app(state, Launcher()),
+        "control": control_app(state, launcher),
         "data": data_api.create_app(state),
         "notes": notes.create_app(state),
         "docs": docs.create_app(state),
@@ -34,10 +35,14 @@ async def serve(state: ArenaState) -> None:
     def stop(*_):
         for s in servers:
             s.should_exit = True
+        launcher.kill_all()
 
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
-    await asyncio.gather(*(s.serve() for s in servers))
+    try:
+        await asyncio.gather(*(s.serve() for s in servers))
+    finally:
+        launcher.kill_all()
 
 
 def main() -> None:

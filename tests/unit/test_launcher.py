@@ -36,3 +36,24 @@ def test_returns_child_exit_code(tmp_path):
     launcher = Launcher(timeout=10, log_dir=tmp_path,
                         command=lambda run_id, agents: [sys.executable, "-c", "import sys; sys.exit(3)"])
     assert launcher.run("r2", ["a_1"]) == 3
+
+
+def test_kill_all_terminates_live_process_trees(tmp_path):
+    import threading
+
+    launcher = Launcher(timeout=60, log_dir=tmp_path, command=lambda run_id, agents: [sys.executable, "-c", TREE])
+    result = []
+    t = threading.Thread(target=lambda: result.append(launcher.run("r3", ["a_1"])))
+    t.start()
+    log = tmp_path / "r3.log"
+    for _ in range(100):
+        if log.exists() and log.read_text().strip():
+            break
+        time.sleep(0.1)
+    grandchild = int(log.read_text().split()[0])
+    assert pid_alive(grandchild)
+    launcher.kill_all()
+    t.join(10)
+    assert not t.is_alive() and result[0] != 0
+    time.sleep(0.5)
+    assert not pid_alive(grandchild)
