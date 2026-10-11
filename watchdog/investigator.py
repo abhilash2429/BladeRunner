@@ -185,7 +185,7 @@ class Investigator:
                 return f"error: incident search failed: {type(e).__name__}"
         return f"error: unknown tool {name}"
 
-    def _parse(self, args: dict, known: dict[str, Span]) -> list[Finding]:
+    def _parse(self, args: dict, known: dict[str, Span], own: set[str]) -> list[Finding]:
         by_category: dict[str, Finding] = {}
         for item in args.get("findings") or []:
             try:
@@ -204,7 +204,7 @@ class Investigator:
             if not claim:
                 continue
             valid = list(dict.fromkeys(i for i in ids if i in known))
-            if not any(known[i].kind == "TOOL" and tool_call(known[i]) is not None for i in valid):
+            if not any(i in own and known[i].kind == "TOOL" and tool_call(known[i]) is not None for i in valid):
                 continue
             if len(valid) < len(set(ids)):
                 confidence = min(confidence, 0.45)
@@ -231,6 +231,7 @@ class Investigator:
             return cache[tid]
 
         known = {s.span_id: s for s in reversed(spans_of(trace_id))}
+        own = set(known)
         categories = "\n".join(f"- {k}: {v['name']}. {v['description']}" for k, v in self.catalog.items())
         seed = {"trace_id": trace_id, "run_id": session_id, "agent": agent,
                 "policy": self.policy_text_for(role_of(agent)), "flagged_hits": hits,
@@ -269,7 +270,7 @@ class Investigator:
                         messages.append({"role": "tool", "tool_call_id": tc.id,
                                          "content": "error: findings must be a list; retry"})
                         continue
-                    return self._parse(args, known)
+                    return self._parse(args, known, own)
                 if over_budget:
                     result = "error: tool budget exhausted"
                 else:

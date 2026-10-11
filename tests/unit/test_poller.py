@@ -82,6 +82,14 @@ def test_sweep_skips_unchanged_traces(tmp_path):
     assert p.sweep() == [] and p.source.span_calls == calls
 
 
+def test_sweep_never_marks_a_trace_clean_without_rules_for_its_role(tmp_path):
+    p, st = make(tmp_path)
+    p.rules_by_role = {}
+    assert p.sweep() == [] and st.kv_get("seen:t_bad") is None and p.source.span_calls == 0
+    p.rules_by_role = RULES
+    assert [f.trace_id for f in p.sweep()] == ["t_bad"]
+
+
 def test_native_hits_dedupe(tmp_path):
     client = FakeClient({None: ([{"id": "h1", "traceId": "t_bad", "spanId": "b"},
                                  {"id": "h2", "traceId": "t_confirm", "spanId": "d"}], None)})
@@ -91,6 +99,18 @@ def test_native_hits_dedupe(tmp_path):
     assert [f.trace_id for f in flags] == ["t_bad"] and flags[0].source == "native"
     p.tick()
     assert p.poll_native() == []
+
+
+def test_native_hits_on_traces_older_than_the_window_are_skipped(tmp_path):
+    client = FakeClient({None: ([{"id": "h1", "traceId": "t_old", "spanId": "b"},
+                                 {"id": "h2", "traceId": "t_bad", "spanId": "b"}], None)})
+    p, st = make(tmp_path, client)
+    p.detections = {"det-1": "research_agent:empty_destination:notes_write"}
+    old = (NOW - timedelta(hours=2)).isoformat().replace("+00:00", "Z")
+    p.source.traces["t_old"] = (TraceInfo("t_old", "r0", "research_agent_1", ("agent:research_agent_1",), 2,
+                                          "finalized", old), p.source.traces["t_bad"][1])
+    assert [f.trace_id for f in p.poll_native()] == ["t_bad"]
+    assert st.kv_get("hit:h1") == "1"
 
 
 def test_tick_opens_cases(tmp_path):

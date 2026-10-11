@@ -36,6 +36,14 @@ class Poller:
     def _skip(self, info) -> bool:
         return bool(info.session_id and self.state.kv_get(f"confirm_session:{info.session_id}"))
 
+    def _stale(self, info) -> bool:
+        # Detections return every hit they ever produced; the sweep only looks at the window.
+        try:
+            started = datetime.fromisoformat(info.started_at.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        return started.tzinfo is not None and started < self.now() - self.window
+
     def _record_error(self, e: Exception, detail: str = "") -> None:
         self._errored = True
         status = getattr(e, "status", None)
@@ -58,7 +66,7 @@ class Poller:
                     self._record_error(e)
                     continue
                 taken.add(h["id"])
-                if not info.agent or self._skip(info):
+                if not info.agent or self._skip(info) or self._stale(info):
                     self.state.kv_set(key, "1")
                     continue
                 flags.append(Flag(info.trace_id, info.session_id, info.agent, "native",
@@ -107,13 +115,16 @@ class Poller:
         if self.state.kv_get(key) == marker:
             self.state.kv_delete(PENDING + info.trace_id)
             return
+        rules = self.rules_by_role.get(role_of(info.agent))
+        if not rules:
+            return
         try:
             spans = self.source.spans(info.trace_id)
         except Exception as e:
             self._record_error(e)
             return
         try:
-            hits = evaluate_trace(self.rules_by_role.get(role_of(info.agent), []), spans)
+            hits = evaluate_trace(rules, spans)
         except Exception as e:
             self._record_error(e)
             hits = []

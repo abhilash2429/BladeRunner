@@ -10,6 +10,7 @@ from common.config import REPO_ROOT
 
 POLICY_DIR = REPO_ROOT / "policy"
 _SUFFIX = re.compile(r"_\d+$")
+_ROLE = re.compile(r"[A-Za-z0-9_]+")
 
 
 def _string_list(value: object, field: str, required: bool = False) -> tuple[str, ...]:
@@ -65,6 +66,9 @@ def role_of(agent_name: str) -> str:
 
 
 def policy_path(role: str, root: Path = POLICY_DIR) -> Path:
+    # Roles come from trace tags, which agents and anyone holding the ingest key control.
+    if not _ROLE.fullmatch(role) or role == "catalog":
+        raise FileNotFoundError(f"no policy for role {role!r}")
     return root / f"{role}.yaml"
 
 

@@ -6,9 +6,16 @@ from common.policy import (
     Policy,
     load_catalog,
     load_policy,
+    load_policy_text,
     role_of,
     tightening_violations,
 )
+
+
+@pytest.mark.parametrize("role", ["../arena/scenarios/planted", "catalog", "", "research agent"])
+def test_role_from_a_trace_tag_cannot_name_another_file(role):
+    with pytest.raises(FileNotFoundError):
+        load_policy_text(role)
 
 
 def test_load_research_policy():

@@ -5,6 +5,7 @@ from watchdog.actions.patch import PatchResult
 from watchdog.actions.quarantine import ControlError
 from watchdog.daemon import Daemon, Pipeline
 from watchdog.investigator import Finding
+from watchdog.neatlogs_client import NeatlogsError
 from watchdog.state import WatchdogState
 
 
@@ -270,6 +271,36 @@ def test_both_investigators_failing_needs_review_never_dismissed(tmp_path):
     assert st.get(case.case_id).status == "needs_review"
     assert parts["control"].calls == ["pause"] and parts["writeback"].tags == ["needs_review"]
     assert len([e for e in st.events(case.case_id) if e["kind"] == "investigation_failed"]) == 2
+
+
+class SourceDownInvestigator(FakeInvestigator):
+    def __init__(self, failures):
+        super().__init__()
+        self.failures = failures
+
+    def investigate(self, **kw):
+        if self.failures:
+            self.failures -= 1
+            self.calls += 1
+            raise NeatlogsError(429, "retries exhausted")
+        return super().investigate(**kw)
+
+
+def test_trace_source_error_defers_investigation_without_using_the_fallback(tmp_path):
+    fallback = FakeInvestigator()
+    p, st, case, _, _ = build(tmp_path, investigator=SourceDownInvestigator(2), fallback=fallback)
+    p.run_case(case)
+    assert st.get(case.case_id).status == "investigating" and fallback.calls == 0
+    p.run_case(st.get(case.case_id))
+    p.run_case(st.get(case.case_id))
+    assert st.get(case.case_id).status not in ("investigating", "needs_review") and fallback.calls == 0
+
+
+def test_trace_source_down_for_good_ends_in_needs_review(tmp_path):
+    p, st, case, _, _ = build(tmp_path, investigator=SourceDownInvestigator(99))
+    for _ in range(p.source_retries + 1):
+        p.run_case(st.get(case.case_id))
+    assert st.get(case.case_id).status == "needs_review"
 
 
 def test_unknown_role_needs_review_without_investigating(tmp_path):
@@ -591,3 +622,12 @@ def test_rules_are_not_reloaded_while_a_patch_is_in_progress(tmp_path):
     poller.rules_by_role = {"research_agent": ["frozen"]}
     Daemon(state=st, poller=poller, pipeline=p).reload_rules()
     assert poller.rules_by_role == {"research_agent": ["frozen"]}
+
+
+def test_rules_load_on_start_even_when_a_patch_was_in_progress(tmp_path):
+    p, st, case, _, _ = build(tmp_path, auto_patch=False)
+    p.run_case(case)
+    st.transition(case.case_id, "patching")
+    poller = FakePoller()
+    Daemon(state=st, poller=poller, pipeline=p).reload_rules()
+    assert "research_agent" in poller.rules_by_role

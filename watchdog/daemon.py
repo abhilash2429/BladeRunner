@@ -6,11 +6,14 @@ import threading
 import time
 from dataclasses import asdict
 
+import httpx
+
 from common.config import RUNS_DIR, env, load_env
 from common.policy import POLICY_DIR, load_policy, load_policy_text, role_of
 from watchdog.actions.quarantine import ControlError
 from watchdog.compiler import compile_policy, ensure_detections
 from watchdog.investigator import Finding
+from watchdog.neatlogs_client import NeatlogsError
 from watchdog.verifier import decide
 
 
@@ -25,7 +28,7 @@ class Pipeline:
     def __init__(self, *, state, control, investigator, verifier, writeback, reporter, patcher, confirmer, memory,
                  source=None, fallback_investigator=None, policy_text_for=load_policy_text, auto_patch: bool = True,
                  stop_retries: int = 3, patch_retries: int = 1, verify_retries: int = 3, control_retries: int = 3,
-                 confirm_retries: int = 3, error_retries: int = 5):
+                 confirm_retries: int = 3, error_retries: int = 5, source_retries: int = 5):
         self.state = state
         self.control = control
         self.investigator = investigator
@@ -45,6 +48,7 @@ class Pipeline:
         self.control_retries = control_retries
         self.confirm_retries = confirm_retries
         self.error_retries = error_retries
+        self.source_retries = source_retries
 
     @staticmethod
     def _findings(case) -> list[Finding]:
@@ -150,6 +154,12 @@ class Pipeline:
                 findings = investigator.investigate(trace_id=case.trace_id, session_id=case.run_id, agent=case.agent,
                                                     hits=case.evidence, tag=case.case_id)
                 break
+            except (NeatlogsError, httpx.HTTPError) as e:
+                # The traces were unreadable, which says nothing about the model; retry the case later.
+                self.state.log_event(case.case_id, "investigation_deferred", {"investigator": label, **_err(e)})
+                if self.state.bump_retry(case.case_id, "investigate_source") >= self.source_retries:
+                    return self._needs_review(case, [])
+                return False
             except Exception as e:
                 self.state.log_event(case.case_id, "investigation_failed", {"investigator": label, **_err(e)})
         if findings is None:
@@ -316,7 +326,7 @@ class Daemon:
         self.threads: dict[str, threading.Thread] = {}
 
     def reload_rules(self) -> None:
-        if self.state.active_cases("patching"):
+        if self.state.active_cases("patching") and self.poller.rules_by_role:
             return
         roles = [p.stem for p in sorted(self.policy_dir.glob("*.yaml")) if p.stem != "catalog"]
         previous = self.poller.rules_by_role

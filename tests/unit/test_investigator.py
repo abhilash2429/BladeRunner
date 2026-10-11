@@ -141,6 +141,13 @@ def test_sibling_span_ids_count_only_after_the_trace_was_opened(scripted_llm, fa
     assert opened[0].evidence_span_ids == ["s9", "s2"] and opened[0].confidence == 0.8
 
 
+def test_finding_needs_an_executed_call_in_the_flagged_trace(scripted_llm, fake_response):
+    cited = submit([{"category": "C1", "evidence_span_ids": ["s9"], "claim": "the other agent fetched",
+                     "confidence": 0.9}])
+    assert run(scripted_llm([fake_response(("get_span_tree", {"trace_id": "t2"})),
+                             fake_response(("submit_findings", cited))])) == []
+
+
 def test_duplicate_categories_are_merged(scripted_llm, fake_response):
     llm = scripted_llm([fake_response(("submit_findings", submit([
         {"category": "C1", "evidence_span_ids": ["s1"], "claim": "a", "confidence": 0.6},
