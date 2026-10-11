@@ -52,7 +52,7 @@ Do all of this off camera. Tick every line.
 - [ ] The required variables are set. The command below prints names and True/False only. Run it in a pane, then `Clear-Host`:
   `uv run python -c "from common.config import load_env; import os; load_env(); print({k: bool(os.environ.get(k)) for k in ['NEATLOGS_INGEST_KEY','NEATLOGS_TOKEN','NEATLOGS_PROJECT_ID','NEATLOGS_DETECTION_GROUP_ID','AWS_BEARER_TOKEN_BEDROCK','AWS_REGION']})"`
 - [ ] `entire status` shows Entire enabled for the repo, and `.opencode/plugins/entire.ts` exists. Without the plugin, OpenCode patches get no checkpoint.
-- [ ] **Quiet window:** no fleet run in the 30 minutes before the watchdog starts. A fresh watchdog DB sweeps the last 30 minutes of traces, and stale runs open extra cases. On Oct 11, those extra cases drove the neatlogs 429s and the `quarantine_failed` cases.
+- [ ] **Quiet window:** no fleet run in the 30 minutes before the watchdog starts. A fresh watchdog DB sweeps the last 30 minutes of traces, and any run in that window opens cases. Native detection hits on older traces are now skipped (commit b086f76); on Oct 11 those stale hits opened 8 extra cases that drove the 429s and the `quarantine_failed` cases.
 
 **Recording setup**
 - [ ] OBS at 1920x1080, 30 fps, recording to MKV (crash-safe), remuxed to MP4 afterwards. One continuous recording for the whole take.

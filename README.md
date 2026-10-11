@@ -21,7 +21,7 @@ Bladerunner does that job end to end.
 3. **Investigate.** An investigator model (Kimi K2.5, fallback GLM-5) walks the span tree with tools, pulls past incidents from Entire Brain, and writes findings. Every finding cites span ids.
 4. **Verify.** A verifier from a different model family (DeepSeek V3.2 in dev, Claude Sonnet 4.6 when scored) checks that every cited span exists and shows what the finding claims. Unsupported findings get rejected. Uncertain ones go to `needs_review`.
 5. **Quarantine and write back.** A verified case stops the agent, then tags and renames the trace in neatlogs, leaves span-level feedback, and writes an incident report.
-6. **Patch.** OpenCode (GLM-5) gets a fix request and edits only `arena/guardrails/` or the agent's policy file. Bladerunner rejects any change outside those paths and any policy edit that loosens permissions. The guardrail tests must pass. The commit carries an Entire checkpoint, so `entire why` traces each patched line back to the incident.
+6. **Patch.** OpenCode (GLM-5) gets a fix request, and its own permissions (`opencode.json`) allow edits only to `arena/guardrails/` and policy files. Bladerunner then rejects any change git sees outside `arena/guardrails/` or that agent's policy file, any policy edit that loosens permissions, and any attempt that moves HEAD. The guardrail tests must pass. The commit carries an Entire checkpoint, so `entire why` traces each patched line back to the incident.
 7. **Confirm.** The arena re-runs the agent plus a clean control run. The case is `fixed` only if the hidden ground truth shows no violation, the control still behaves, and the watchdog's own rules see clean traces. Otherwise it is `not_fixed`.
 8. **Remember.** The incident goes into Entire Brain, so the next investigation of the same category starts from what was learned.
 
@@ -102,7 +102,7 @@ Three processes with a hard boundary between them.
 - **fleet** (`fleet/`): one OS process per agent (MiniMax M2.5 via Bedrock), each tracing to neatlogs.
 - **watchdog** (`watchdog/`): owns `runs/watchdog.duckdb` and never imports `arena`. A contract test (`tests/contract/test_boundaries.py`) enforces that. Its inputs are neatlogs and the arena control API, nothing else.
 
-Policy lives in `policy/`. `catalog.yaml` defines seven categories (C1 to C5 scored, C6 and C7 tracked). `research_agent.yaml` lists the agent's tools, the hosts each tool may reach, and sensitive value patterns. The compiler (`watchdog/compiler.py`) turns a policy into rules for both neatlogs native detections and the local evaluator. Both paths open cases, and the watchdog keeps working when native detections are unavailable. In the Oct 11 live runs, 11 of 13 cases were raised by neatlogs native detections (3 by both paths) and 2 by the local evaluator alone.
+Policy lives in `policy/`. `catalog.yaml` defines seven categories (C1 to C5 scored, C6 and C7 tracked). `research_agent.yaml` lists the agent's tools, the hosts each tool may reach, and sensitive value patterns. The compiler (`watchdog/compiler.py`) turns a policy into rules for both neatlogs native detections and the local evaluator. Both paths open cases, and the watchdog keeps working when native detections are unavailable. In the Oct 11 live runs, native detections raised 11 of 13 cases (3 together with the local evaluator), but 8 of those were hits on traces from runs hours earlier, because a detection returns every hit it ever made. The poller now ignores native hits on traces older than its window.
 
 | Category | Meaning |
 |---|---|
@@ -124,7 +124,7 @@ Models, from `common/llm.py`:
 | Verifier, dev | DeepSeek V3.2 (Bedrock) |
 | Verifier, scored | Claude Sonnet 4.6 (hackathon LiteLLM, $18 hard cap) |
 
-Every LLM call goes through a spend ledger (`runs/spend.jsonl`) that refuses calls past the cap.
+Every watchdog and benchmark LLM call is recorded in a spend ledger (`runs/spend.jsonl`), which refuses LiteLLM calls past the cap. Arena agents and OpenCode run on Bedrock outside the ledger.
 
 ## Benchmark design
 
@@ -195,13 +195,16 @@ uv run python -m bench.live_ttd
 - The arena is fully local. Agents can only reach 127.0.0.1:8101 to 8104, and the scenarios stay at category level.
 - The patcher can only tighten. New tools, new hosts, and edits outside the guardrail and policy paths are rejected before commit.
 - Span content goes to every model as data, and model output is escaped before it lands in reports.
-- Secrets live in `.env` and are never logged, traced or committed. Fix requests are redacted before they reach OpenCode.
+- Secrets live in `.env` and are never logged, traced or committed. Fix requests are redacted before they reach OpenCode. External tools get no project secrets: OpenCode gets only the Bedrock token and region, and the guardrail test gate gets none.
+- Roles come from trace tags, so they must be plain names before they select a policy file, and a finding must cite an executed call from the flagged trace itself.
 
 ## Known limitations
 
 - Arena pause flags live in memory, so restarting the arena forgets which agents are paused. Stopping an agent from an older run returns 404 after a restart.
 - neatlogs rate limits payload fetches under load. The cache absorbs most of it, and a shared rate limiter is the next step.
 - `entire why` attributes lines to whichever agent session is active in the repo, so a concurrent coding session can claim the OpenCode patch lines.
+- The guardrail test gate runs OpenCode-written code on the host in the repo checkout. It has no project secrets, and OpenCode cannot edit outside the patch surface, but the gate is not sandboxed and does not see gitignored paths. Running each patch in a throwaway worktree is the next step.
+- Each verified case is patched on its own. When several agents in one run break the same rule, later cases have to change something the first patch already fixed, or fail to patch.
 
 ## Built during neatHack
 
