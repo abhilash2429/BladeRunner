@@ -107,12 +107,19 @@ class SpendLedger:
             raise BudgetExceeded(f"LiteLLM spend {spent:.2f} reached cap {self.cap:.2f}")
 
 
+def _echo_arguments(text: str | None) -> str:
+    try:
+        return text if isinstance(json.loads(text or ""), dict) else "{}"
+    except ValueError:
+        return "{}"
+
+
 def assistant_message(msg) -> dict:
     out: dict = {"role": "assistant", "content": msg.content or ""}
     if msg.tool_calls:
         out["tool_calls"] = [
             {"id": tc.id, "type": "function",
-             "function": {"name": tc.function.name, "arguments": tc.function.arguments or "{}"}}
+             "function": {"name": tc.function.name, "arguments": _echo_arguments(tc.function.arguments)}}
             for tc in msg.tool_calls
         ]
     return out

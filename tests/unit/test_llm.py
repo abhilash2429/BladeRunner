@@ -59,6 +59,14 @@ def test_assistant_message_with_tool_calls():
         {"id": "t1", "type": "function", "function": {"name": "fetch", "arguments": '{"url": "x"}'}}]}
 
 
+def test_assistant_message_replaces_unparseable_arguments():
+    # Bedrock rejects the next request with 400 when history carries a tool call cut off mid-JSON.
+    calls = [SimpleNamespace(id=f"t{i}", function=SimpleNamespace(name="fetch", arguments=a))
+             for i, a in enumerate(['{"url": "htt', '[1]', '{"url": "x"}'])]
+    out = assistant_message(SimpleNamespace(content="", tool_calls=calls))
+    assert [tc["function"]["arguments"] for tc in out["tool_calls"]] == ["{}", "{}", '{"url": "x"}']
+
+
 def test_assistant_message_text_only():
     out = assistant_message(SimpleNamespace(content="hi", tool_calls=None))
     assert out == {"role": "assistant", "content": "hi"}
