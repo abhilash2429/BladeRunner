@@ -598,3 +598,7 @@ go
 <status>completed</status>
 <summary>Background command "Score AgentDojo with v0 and full pipeline" completed (exit code 0)</summary>
 </task-notification>
+
+---
+
+I hit my usage limit while you were working, but it has reset now. Please continue from where you left off.
