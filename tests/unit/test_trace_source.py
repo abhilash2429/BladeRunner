@@ -217,3 +217,44 @@ def test_sort_uses_parsed_time_with_span_id_tiebreak():
     ]
     spans = LiveSource(FakeClient(raw)).spans("t1")
     assert [s.span_id for s in spans] == ["r", "a", "b", "c"]
+
+
+class CountingClient(FakeClient):
+    def __init__(self, raw=None):
+        super().__init__(raw)
+        self.raw_calls = 0
+
+    def get_raw_spans(self, trace_id):
+        self.raw_calls += 1
+        return super().get_raw_spans(trace_id)
+
+
+def truncated_raw():
+    raw = json.loads(json.dumps(recorded("raw_spans.json")["spans"]))
+    raw[1]["input"] = {"mimeType": "application/json", "preview": '{"tool":"day1_notes_wri', "truncated": True}
+    return raw
+
+
+def test_live_source_reuses_spans_and_payloads_within_the_ttl():
+    clock = {"t": 0.0}
+    client = CountingClient(truncated_raw())
+    src = LiveSource(client, clock=lambda: clock["t"], cache_ttl=300)
+    first = src.spans("t1")
+    clock["t"] = 299
+    assert src.spans("t1") == first and src.payload("t1", "bc89bfb07efed2de")["output"] == '"ok"'
+    assert client.raw_calls == 1 and len(client.payload_calls) == 1
+    clock["t"] = 301
+    src.spans("t1")
+    assert client.raw_calls == 2
+
+
+def test_live_source_does_not_cache_degraded_spans():
+    class FlakyPayload(CountingClient):
+        def get_payload(self, trace_id, span_id, fields=("input", "output")):
+            raise NeatlogsError(429, "slow down")
+
+    client = FlakyPayload(truncated_raw())
+    src = LiveSource(client, clock=lambda: 0.0)
+    src.spans("t1")
+    src.spans("t1")
+    assert client.raw_calls == 2

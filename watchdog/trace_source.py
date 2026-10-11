@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -158,10 +160,26 @@ def _payload_fields(payload: dict) -> dict:
 
 
 class LiveSource:
-    def __init__(self, client, workflow_name: str = "arena-agent", now=lambda: datetime.now(timezone.utc)):
+    def __init__(self, client, workflow_name: str = "arena-agent", now=lambda: datetime.now(timezone.utc),
+                 clock=time.monotonic, cache_ttl: float = 300):
         self.client = client
         self.workflow_name = workflow_name
         self.now = now
+        self.clock = clock
+        self.cache_ttl = cache_ttl
+        self._cache: dict[tuple, tuple[float, object]] = {}
+        self._lock = threading.Lock()
+
+    def _cached(self, key: tuple):
+        with self._lock:
+            hit = self._cache.get(key)
+            return hit[1] if hit and self.clock() - hit[0] <= self.cache_ttl else None
+
+    def _store(self, key: tuple, value) -> None:
+        now = self.clock()
+        with self._lock:
+            self._cache = {k: v for k, v in self._cache.items() if now - v[0] <= self.cache_ttl}
+            self._cache[key] = (now, value)
 
     def list_traces(self, since: datetime, until: datetime | None) -> list[TraceInfo]:
         return [trace_info_from(t) for t in self.client.list_traces(since=since, until=until,
@@ -171,6 +189,9 @@ class LiveSource:
         return trace_info_from(self.client.get_trace(trace_id))
 
     def spans(self, trace_id: str) -> list[Span]:
+        cached = self._cached(("spans", trace_id))
+        if cached is not None:
+            return list(cached)
         spans = []
         degraded = []
         for raw in self.client.get_raw_spans(trace_id):
@@ -186,13 +207,20 @@ class LiveSource:
                             full["input"] if _is_truncated(raw.get("input")) else span.input,
                             full["output"] if _is_truncated(raw.get("output")) else span.output)
             spans.append(span)
+        spans.sort(key=_order)
         if degraded:
             log.warning("trace %s: payload fetch failed for %d truncated span(s), using previews: %s",
                         trace_id, len(degraded), degraded)
-        return sorted(spans, key=_order)
+        else:
+            self._store(("spans", trace_id), tuple(spans))
+        return spans
 
     def payload(self, trace_id: str, span_id: str) -> dict:
-        return _payload_fields(self.client.get_payload(trace_id, span_id))
+        cached = self._cached(("payload", trace_id, span_id))
+        if cached is None:
+            cached = _payload_fields(self.client.get_payload(trace_id, span_id))
+            self._store(("payload", trace_id, span_id), cached)
+        return dict(cached)
 
     def sibling_traces(self, session_id: str) -> list[str]:
         since = self.now() - timedelta(hours=12)
