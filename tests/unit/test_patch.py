@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 import threading
@@ -349,12 +350,12 @@ def test_runner_reports_missing_executable():
 
 
 def test_runner_ignores_configured_exe_that_does_not_exist(monkeypatch, tmp_path):
-    exe = tmp_path / "opencode"
+    exe = tmp_path / ("opencode.exe" if sys.platform == "win32" else "opencode")
     exe.write_text("#!/bin/sh\n")
     exe.chmod(0o755)
     monkeypatch.setenv("OPENCODE_EXE", r"C:\nowhere\opencode.exe")
     monkeypatch.setenv("PATH", str(tmp_path))
-    assert OpenCodeRunner().exe == str(exe)
+    assert os.path.normcase(OpenCodeRunner().exe) == os.path.normcase(str(exe))
     monkeypatch.setenv("OPENCODE_EXE", str(exe))
     assert OpenCodeRunner().exe == str(exe)
 
@@ -369,7 +370,7 @@ def test_runner_passes_fix_request_file_and_model():
     code, out = OpenCodeRunner(exe="oc", run=run)(Path("runs/fixreq/c1.md"), Path("/repo"))
     assert code == 0 and out == "ok"
     assert seen["cmd"] == ["oc", "run", "--format", "json", "-m", "amazon-bedrock/zai.glm-5", "-f",
-                           "runs/fixreq/c1.md", "Apply the attached fix request."]
+                           str(Path("runs/fixreq/c1.md")), "Apply the attached fix request."]
     assert seen["kw"]["cwd"] == Path("/repo") and seen["kw"]["timeout"] == 600 and "PATH" in seen["kw"]["env"]
 
 
@@ -390,6 +391,18 @@ def test_run_tree_kills_background_grandchildren_after_a_normal_exit(tmp_path):
     assert run_tree([sys.executable, "-c", parent], timeout=30).returncode == 0
     time.sleep(1.5)
     assert not marker.exists()
+
+
+def test_run_tree_without_reap_leaves_background_children_running(tmp_path):
+    marker = tmp_path / "late.txt"
+    child = f"import time; time.sleep(1); open({str(marker)!r}, 'w').write('x')"
+    parent = ("import subprocess, sys; d = subprocess.DEVNULL; "
+              f"subprocess.Popen([sys.executable, '-c', {child!r}], stdin=d, stdout=d, stderr=d)")
+    assert run_tree([sys.executable, "-c", parent], timeout=30, reap=False).returncode == 0
+    deadline = time.monotonic() + 10
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert marker.exists()
 
 
 def test_git_passes_a_default_timeout_and_literal_pathspecs(tmp_path):

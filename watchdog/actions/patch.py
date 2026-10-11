@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import os
 import re
@@ -100,9 +101,84 @@ def redact(text: str) -> str:
     return _SECRET_TEXT.sub("[redacted]", text)
 
 
-def _kill_tree(proc: subprocess.Popen) -> None:
+if os.name == "nt":
+    from ctypes import wintypes
+
+    class _BasicLimits(ctypes.Structure):
+        _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
+                    ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                    ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
+                    ("Affinity", ctypes.c_size_t), ("PriorityClass", wintypes.DWORD),
+                    ("SchedulingClass", wintypes.DWORD)]
+
+    class _ExtendedLimits(ctypes.Structure):
+        _fields_ = [("BasicLimitInformation", _BasicLimits), ("IoInfo", ctypes.c_uint64 * 6),
+                    ("ProcessMemoryLimit", ctypes.c_size_t), ("JobMemoryLimit", ctypes.c_size_t),
+                    ("PeakProcessMemoryUsed", ctypes.c_size_t), ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+    _k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _k32.CreateJobObjectW.argtypes = (ctypes.c_void_p, wintypes.LPCWSTR)
+    _k32.CreateJobObjectW.restype = wintypes.HANDLE
+    _k32.SetInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD)
+    _k32.SetInformationJobObject.restype = wintypes.BOOL
+    _k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    _k32.OpenProcess.restype = wintypes.HANDLE
+    _k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    _k32.AssignProcessToJobObject.restype = wintypes.BOOL
+    _k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    _k32.TerminateJobObject.restype = wintypes.BOOL
+    _k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    _k32.CloseHandle.restype = wintypes.BOOL
+
+
+class _Job:
+    # taskkill /T walks parent pids, so it misses grandchildren whose parent already exited. A job does not.
+    def __init__(self, pid: int, kill_on_close: bool):
+        self.handle = _k32.CreateJobObjectW(None, None)
+        if not self.handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            if kill_on_close:
+                limits = _ExtendedLimits()
+                limits.BasicLimitInformation.LimitFlags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+                if not _k32.SetInformationJobObject(self.handle, 9, ctypes.byref(limits), ctypes.sizeof(limits)):
+                    raise ctypes.WinError(ctypes.get_last_error())
+            process = _k32.OpenProcess(0x0101, False, pid)  # PROCESS_SET_QUOTA | PROCESS_TERMINATE
+            if not process:
+                raise ctypes.WinError(ctypes.get_last_error())
+            try:
+                if not _k32.AssignProcessToJobObject(self.handle, process):
+                    raise ctypes.WinError(ctypes.get_last_error())
+            finally:
+                _k32.CloseHandle(process)
+        except OSError:
+            self.close()
+            raise
+
+    def kill(self) -> None:
+        if not _k32.TerminateJobObject(self.handle, 1):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    def close(self) -> None:
+        if self.handle:
+            _k32.CloseHandle(self.handle)
+            self.handle = None
+
+
+def _job_for(proc: subprocess.Popen, reap: bool) -> _Job | None:
+    if os.name != "nt":
+        return None
     try:
-        if os.name == "nt":
+        return _Job(proc.pid, kill_on_close=reap)
+    except OSError:
+        return None
+
+
+def _kill_tree(proc: subprocess.Popen, job: _Job | None = None) -> None:
+    try:
+        if job:
+            job.kill()
+        elif os.name == "nt":
             subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, timeout=30)
         else:
             os.killpg(proc.pid, signal.SIGKILL)
@@ -115,17 +191,20 @@ def run_tree(cmd, *, cwd=None, env=None, timeout=None, reap: bool = True, **_) -
              else {"start_new_session": True})
     with subprocess.Popen(cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", **group) as proc:
+        job = _job_for(proc, reap)
         try:
             out, err = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            _kill_tree(proc)
+            _kill_tree(proc, job)
             try:
                 proc.communicate(timeout=10)
             except subprocess.TimeoutExpired:
                 pass
             raise
         finally:
-            if reap and os.name != "nt":
+            if job:
+                job.close()
+            elif reap and os.name != "nt":
                 try:
                     os.killpg(proc.pid, signal.SIGKILL)
                 except (ProcessLookupError, PermissionError):
