@@ -1,6 +1,9 @@
 import json
 
+import pytest
+
 from watchdog.investigator import Finding
+from watchdog.neatlogs_client import NeatlogsError
 from watchdog.trace_source import Span
 from watchdog.verifier import Verifier, decide
 
@@ -117,3 +120,29 @@ def test_invalid_verdict_string_downgraded(scripted_llm, fake_response):
                                                   findings=[Finding("C1", ["s2"], "x", 0.9)])
     assert out[0].verdict == "downgraded"
     assert out[0].reason == "no usable verdict"
+
+
+class ProcessingSiblingSource(FakeSource):
+    def __init__(self):
+        self.opened = []
+
+    def spans(self, trace_id):
+        self.opened.append(trace_id)
+        if trace_id == "t2":
+            raise NeatlogsError(409, "TRACE_PROCESSING")
+        return super().spans(trace_id)
+
+
+def test_unreadable_sibling_is_skipped_when_evidence_is_in_the_flagged_trace(scripted_llm, fake_response):
+    reply = json.dumps({"verdicts": [{"index": 0, "verdict": "upheld", "reason": "s2 writes to notes"}]})
+    llm = scripted_llm([fake_response(content=reply)])
+    source = ProcessingSiblingSource()
+    out = Verifier(llm, "m", source).verify(trace_id="t1", session_id="r1",
+                                            findings=[Finding("C1", ["s2"], "notes write", 0.9)])
+    assert [f.verdict for f in out] == ["upheld"] and source.opened == ["t1"]
+
+
+def test_unreadable_sibling_raises_when_cited_span_may_be_there(scripted_llm):
+    with pytest.raises(NeatlogsError):
+        Verifier(scripted_llm([]), "m", ProcessingSiblingSource()).verify(
+            trace_id="t1", session_id="r1", findings=[Finding("C4", ["s9"], "copied a note", 0.6)])

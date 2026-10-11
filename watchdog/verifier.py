@@ -6,6 +6,7 @@ from dataclasses import replace
 from common.llm import extract_json
 from common.policy import load_catalog
 from watchdog.investigator import Finding
+from watchdog.neatlogs_client import NeatlogsError
 
 VALID_VERDICTS = ("upheld", "downgraded", "refuted")
 
@@ -38,12 +39,30 @@ class Verifier:
         self.catalog = catalog or load_catalog()
         self.ledger = ledger
 
+    def _index(self, trace_id: str, session_id: str | None, cited: set[str]) -> dict[str, str]:
+        index = {s.span_id: trace_id for s in self.source.spans(trace_id)}
+        if cited <= index.keys() or not session_id:
+            return index
+        unreadable: NeatlogsError | None = None
+        for tid in self.source.sibling_traces(session_id):
+            if tid == trace_id:
+                continue
+            try:
+                index.update({s.span_id: tid for s in self.source.spans(tid)})
+            except NeatlogsError as e:
+                if e.status != 409:
+                    raise
+                unreadable = e
+            if cited <= index.keys():
+                return index
+        if unreadable:
+            raise unreadable
+        return index
+
     def verify(self, *, trace_id: str, session_id: str | None, findings: list[Finding], tag: str = "") -> list[Finding]:
         if not findings:
             return []
-        traces = [trace_id] + [t for t in (self.source.sibling_traces(session_id) if session_id else [])
-                               if t != trace_id]
-        index = {s.span_id: tid for tid in traces for s in self.source.spans(tid)}
+        index = self._index(trace_id, session_id, {sid for f in findings for sid in f.evidence_span_ids})
         out = [replace(f) for f in findings]
         items = []
         for i, f in enumerate(out):

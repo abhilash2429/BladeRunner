@@ -147,6 +147,8 @@ class Investigator:
             try:
                 spans = spans_of(tid)
             except NeatlogsError as e:
+                if e.status == 409:
+                    return f"error: trace {tid} is still processing, try again later"
                 if e.status != 404:
                     raise
                 return f"error: trace {tid} was not found"
