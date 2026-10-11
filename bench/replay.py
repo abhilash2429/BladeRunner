@@ -163,16 +163,17 @@ def main() -> None:
     p.add_argument("--truth", default=str(RUNS_DIR / "truth.duckdb"))
     p.add_argument("--spans", default=str(RUNS_DIR / "spans"))
     p.add_argument("--incidents", default=str(RUNS_DIR / "incidents"))
-    p.add_argument("--out", default=str(REPO_ROOT / "site" / "replay"))
+    p.add_argument("--out", default=str(REPO_ROOT / "frontend" / "public" / "replay"))
     args = p.parse_args()
     replay = export(args.run_id, Path(args.watchdog_db), Path(args.truth), Path(args.spans), Path(args.incidents))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / f"{args.run_id}.json").write_text(json.dumps(replay, indent=1, ensure_ascii=False), encoding="utf-8")
+    path = out / f"{args.run_id}.full.json"
+    path.write_text(json.dumps(replay, indent=1, ensure_ascii=False), encoding="utf-8")
     counts = {}
     for e in replay["events"]:
         counts[e["type"]] = counts.get(e["type"], 0) + 1
-    print(f"{len(replay['events'])} events, {len(replay['cases'])} cases -> {out / (args.run_id + '.json')}")
+    print(f"{len(replay['events'])} events, {len(replay['cases'])} cases -> {path}")
     print(json.dumps(counts))
 
 

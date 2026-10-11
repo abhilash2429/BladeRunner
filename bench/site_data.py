@@ -43,7 +43,7 @@ def _agentdojo(root: Path) -> dict:
 
 
 def main() -> None:
-    out = REPO_ROOT / "site" / "data"
+    out = REPO_ROOT / "frontend" / "public" / "data"
     out.mkdir(parents=True, exist_ok=True)
     data = {"held_out": _held_out(REPO_ROOT / "bench" / "results"),
             "agentdojo": _agentdojo(REPO_ROOT / "bench" / "external" / "agentdojo")}

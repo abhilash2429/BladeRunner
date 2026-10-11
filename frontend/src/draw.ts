@@ -18,6 +18,7 @@ const CAGE = { x0: 0.0, y0: 0.36, x1: 0.24, y1: 0.9 };
 const CAGE_SLOTS = [0.48, 0.63, 0.78];
 
 const TRIP_MS = 1800;
+const FADE_MS = 600;
 const INK = "#0b0b0c";
 const MUTED = "#8a8a8f";
 const YELLOW = "#ffd400";
@@ -49,9 +50,24 @@ function nodeSize(w: number) {
   return { nodeW: Math.min(116, Math.max(96, w * 0.13)), nodeH: 44, nameSize: 11.5, portSize: 10 };
 }
 
-function homeOf(index: number, w: number, h: number): [number, number] {
-  const spot = HOMES[index % HOMES.length];
-  return pt(spot[0], spot[1], w, h);
+function homeOf(agent: AgentState, w: number, h: number): [number, number] {
+  const spot = HOMES[(agent.rerun ? agent.rerun.parentIndex : agent.index) % HOMES.length];
+  const [x, y] = pt(spot[0], spot[1], w, h);
+  if (!agent.rerun) return [x, y];
+  const { slot, parentIndex } = agent.rerun;
+  const angle = slot * (Math.PI * 2 / 12) + parentIndex;
+  const r = 24 + (slot % 3) * 9;
+  return [x + Math.cos(angle) * r, y + Math.sin(angle) * r];
+}
+
+// Re-run agents are on screen from their run's start until their answer lands.
+export function rerunAlpha(agent: AgentState, now: number): number {
+  if (!agent.rerun) return 1;
+  const { spawnAt, doneAt } = agent.rerun;
+  if (now < spawnAt) return 0;
+  const fadeIn = clamp((now - spawnAt) / FADE_MS, 0, 1);
+  if (doneAt == null) return fadeIn;
+  return Math.min(fadeIn, clamp(1 - (now - doneAt - TRIP_MS) / FADE_MS, 0, 1));
 }
 
 function cageOf(index: number, w: number, h: number): [number, number] {
@@ -70,7 +86,7 @@ function along(u: number) {
 }
 
 export function agentPoint(agent: AgentState, w: number, h: number, now: number, reduced: boolean) {
-  const [hx, hy] = homeOf(agent.index, w, h);
+  const [hx, hy] = homeOf(agent, w, h);
   const driftTime = agent.frozenAt != null && agent.releasedAt == null ? agent.frozenAt : now;
   const wob = reduced ? 0 : 1;
   const dx = Math.sin(driftTime / 1000 * 0.85 + agent.index) * 7 * wob;
@@ -106,7 +122,7 @@ export function agentPoint(agent: AgentState, w: number, h: number, now: number,
       const u = (now - agent.blockedAt) / 900;
       const bounce = Math.sin(u * Math.PI);
       x = notes[0] - 46 - bounce * 18;
-      y = notes[1] + (agent.index - 1) * 16;
+      y = notes[1] + (agent.rerun ? (agent.rerun.slot % 5) - 2 : agent.index - 1) * (agent.rerun ? 8 : 16);
     }
   }
 
@@ -160,7 +176,7 @@ export function drawSwarm(
   ctx.fillStyle = edge;
   ctx.fillRect(scanX, 0, 1, h);
 
-  const agents = Object.values(state.agents);
+  const agents = Object.values(state.agents).filter((agent) => rerunAlpha(agent, now) > 0);
   const size = nodeSize(w);
   const nodeBoxes: Box[] = SERVICES.map((service) => {
     const [x, y] = pt(service.x, service.y, w, h);
@@ -260,6 +276,22 @@ export function drawSwarm(
 
   for (const agent of agents) {
     const { x, y } = agentPoint(agent, w, h, now, reduced);
+    if (agent.rerun) {
+      ctx.save();
+      ctx.globalAlpha = rerunAlpha(agent, now);
+      ctx.beginPath();
+      ctx.arc(x, y, selected === agent.id ? 4.5 : 3, 0, Math.PI * 2);
+      if (agent.rerun.kind === "control") {
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = "rgba(11, 11, 12, 0.62)";
+        ctx.fill();
+      }
+      ctx.restore();
+      continue;
+    }
     const released = agent.releasedAt != null && now >= agent.releasedAt;
     if (agent.ringAt != null && !released) {
       const age = now - agent.ringAt;
@@ -323,6 +355,7 @@ function paintLabel(ctx: CanvasRenderingContext2D, text: string, x: number, y: n
 export function hitAgent(state: ViewState, w: number, h: number, x: number, y: number, now: number, reduced: boolean) {
   let found: string | null = null;
   for (const agent of Object.values(state.agents)) {
+    if (rerunAlpha(agent, now) === 0) continue;
     const point = agentPoint(agent, w, h, now, reduced);
     if (Math.hypot(point.x - x, point.y - y) < 16) found = agent.id;
   }

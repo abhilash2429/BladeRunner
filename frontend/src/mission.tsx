@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { Player } from "./player";
-import { initialState, reduce } from "./reduce";
+import { agentKey, initialState, reduce } from "./reduce";
 import { CountUp, LiveClock, Note, Scribble, WindowBar } from "./motion";
 import { SwarmView } from "./swarm";
 import { formatClock, formatSkip } from "./timeline";
@@ -174,7 +174,7 @@ function EventStack({ player }: { player: Player | null }) {
         <li key={index} className={row === 0 ? "fresh" : ""}>
           <span className="ev-dot" />
           <span className="ev-text">{describe(point.event)}</span>
-          <span className="ev-meta">{agentLabel(point.event.agent)} · {formatClock(player.timeline.t0, point.real)}</span>
+          <span className="ev-meta">{agentLabel(agentKey(point.event))} · {formatClock(player.timeline.t0, point.real)}</span>
         </li>
       ))}
     </ol>

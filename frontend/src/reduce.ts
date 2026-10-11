@@ -58,7 +58,33 @@ export function makeAgent(id: string, index: number): AgentState {
     blockedAt: null,
     trips: [],
     calls: [],
+    rerun: null,
   };
+}
+
+function rerunKind(event: BrEvent): "confirm" | "control" | null {
+  const kind = event.data?.kind;
+  return (kind === "confirm" || kind === "control") && event.run_id ? kind : null;
+}
+
+// Confirmation and control runs reuse the live agents' names. Each one is its
+// own agent on screen, so a re-run never moves the caged original.
+export function agentKey(event: BrEvent, name = event.agent || ""): string {
+  const kind = rerunKind(event);
+  return kind && name ? `${name} · ${kind} ${event.run_id!.slice(0, 6)}` : name;
+}
+
+function ensureRerun(state: ViewState, event: BrEvent, name: string, at: number): AgentState {
+  const id = agentKey(event, name);
+  if (!state.agents[id]) {
+    const parent = ensureAgent(state, name);
+    const slot = Object.values(state.agents).filter((agent) => agent.rerun?.parent === name).length;
+    state.agents[id] = {
+      ...makeAgent(id, slot),
+      rerun: { kind: rerunKind(event)!, runId: event.run_id!, parent: name, parentIndex: parent.index, slot, spawnAt: at, doneAt: null },
+    };
+  }
+  return state.agents[id];
 }
 
 export function initialState(agentIds: string[]): ViewState {
@@ -130,19 +156,23 @@ export function reduce(state: ViewState, event: BrEvent, at: number): ViewState 
 
   if (event.type === "run.started" && Array.isArray(data.agents)) {
     data.agents.forEach((id) => {
-      if (typeof id === "string") ensureAgent(next, id);
+      if (typeof id !== "string") return;
+      if (rerunKind(event)) ensureRerun(next, event, id, at);
+      else ensureAgent(next, id);
     });
     return next;
   }
 
   if (event.type === "agent.call" && agentId) {
-    const agent = touchAgent(next, agentId);
+    if (rerunKind(event)) ensureRerun(next, event, agentId, at);
+    const agent = touchAgent(next, agentKey(event));
     const service = str(data, "service");
     const tool = str(data, "tool");
     const planted = data.planted === true;
     const forbidden = service === "notes" || tool === "notes_write";
     agent.trips.push({ at, service, tool, planted, forbidden });
     agent.calls.push({ tool, service, path: str(data, "path"), planted, at });
+    if (agent.rerun && tool === "submit_answer") agent.rerun = { ...agent.rerun, doneAt: at };
     if (planted) {
       agent.plantedAt = at;
       next.plantedPulseAt = at;
@@ -155,8 +185,11 @@ export function reduce(state: ViewState, event: BrEvent, at: number): ViewState 
   }
 
   if (event.type === "agent.blocked" && agentId) {
-    const agent = touchAgent(next, agentId);
+    if (rerunKind(event)) ensureRerun(next, event, agentId, at);
+    const agent = touchAgent(next, agentKey(event));
     agent.blockedAt = at;
+    // A re-run bouncing off the guardrail is the fix holding, not a violation.
+    if (agent.rerun) return next;
     agent.trail = "red";
     if (agent.redAt == null) agent.redAt = at;
     return next;

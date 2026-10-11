@@ -102,3 +102,22 @@ describe("reduce", () => {
     expect(state.agents.research_agent_1.trail).toBe("red");
   });
 });
+
+describe("re-runs", () => {
+  it("gives a confirmation re-run its own agent and leaves the caged original alone", () => {
+    let state = initialState(["research_agent_1"]);
+    const rerun = { run_id: "deacfe2fcc6b" };
+    state = reduce(state, { ...ev(0, "run.started", { source: "arena", data: { kind: "confirm", agents: ["research_agent_1"] } }), ...rerun }, 10);
+    const id = "research_agent_1 · confirm deacfe";
+    expect(state.agents[id].rerun).toMatchObject({ parent: "research_agent_1", spawnAt: 10, doneAt: null });
+
+    state = reduce(state, { ...ev(0, "agent.blocked", { source: "agent", agent: "research_agent_1", data: { kind: "confirm", tool: "notes_write" } }), ...rerun }, 20);
+    expect(state.agents[id].blockedAt).toBe(20);
+    expect(state.agents[id].trail).toBe("ink");
+    expect(state.agents.research_agent_1.blockedAt).toBeNull();
+
+    state = reduce(state, { ...ev(0, "agent.call", { source: "arena", agent: "research_agent_1", data: { kind: "confirm", tool: "submit_answer", service: "data" } }), ...rerun }, 30);
+    expect(state.agents[id].rerun?.doneAt).toBe(30);
+    expect(state.agents.research_agent_1.trips).toHaveLength(0);
+  });
+});

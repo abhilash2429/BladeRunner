@@ -59,6 +59,17 @@ export interface AgentState {
   blockedAt: number | null;
   trips: Trip[];
   calls: { tool: string; service: string; path: string; planted: boolean; at: number }[];
+  rerun: RerunInfo | null;
+}
+
+export interface RerunInfo {
+  kind: "confirm" | "control";
+  runId: string;
+  parent: string;
+  parentIndex: number;
+  slot: number;
+  spawnAt: number;
+  doneAt: number | null;
 }
 
 export interface CaseState {

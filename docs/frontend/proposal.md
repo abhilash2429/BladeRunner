@@ -178,6 +178,6 @@ My recommendation:
 ## 9. Decisions (11 Oct)
 
 1. Phase A and C for the submission. Phase B (live mode) after the hackathon.
-2. The frontend is built from this file plus `site/replay/` and `site/data/` (see `site/replay/README.md`). Both data files exist now.
-3. Hosting: GitHub Pages from `site/`.
+2. The frontend is built from this file plus `frontend/public/replay/` and `frontend/public/data/` (see `frontend/public/README.md`). `site/` is build output.
+3. Hosting: GitHub Pages, deployed by `.github/workflows/pages.yml`, which tests and builds `frontend/` on every push to main that touches it.
 4. The demo video is recorded the planned way (terminals, neatlogs, reports). That take gets exported as a second replay the same evening with `uv run python -m bench.replay <run_id> --watchdog-db runs/watchdog-oct12.duckdb`.

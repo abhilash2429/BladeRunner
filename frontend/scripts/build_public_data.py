@@ -1,8 +1,7 @@
 """Build the static replay and benchmark files the site ships with.
 
-Case events come from runs/incidents. Tool calls cited in the findings are
-attached to the case. They are not given timestamps, because this export does
-not include the arena request log.
+Case events come from runs/incidents. Agent calls, guardrail blocks, run starts
+and Brain writes come from the bench.replay export, public/replay/<run>.full.json.
 """
 
 from __future__ import annotations
@@ -12,10 +11,12 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-import pandas as pd
+import duckdb
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "frontend" / "public"
+FULL = OUT / "replay" / "efd78263e6d2.full.json"
+FROM_FULL = {"run.started", "agent.call", "agent.blocked", "case.remembered"}
 
 INCIDENTS = [
     "c90be7b237f54b128327e5a1ead3ceec",
@@ -94,6 +95,12 @@ def cited(findings: list[dict]) -> list[dict]:
 
 
 def build_replay() -> dict:
+    full = json.loads(FULL.read_text(encoding="utf-8"))
+    reruns = {
+        e["case_id"]: e["data"].get("rerun_ids") or []
+        for e in full["events"]
+        if e["type"] == "case.confirming"
+    }
     events: list[dict] = []
     cases: dict[str, dict] = {}
     seq = 0
@@ -160,10 +167,12 @@ def build_replay() -> dict:
                     })
                 elif to == "confirming":
                     pending_confirm = True
+                    ids = reruns.get(case_id) or []
+                    control = [i for i in ids if full["runs"].get(i) == "control"]
                     emit("case.confirming", {
-                        "rerun_ids": [],
-                        "control_id": None,
-                        "note": "Re-run ids are not in the incident file. Guardrail block spans are not in this replay.",
+                        "rerun_ids": [i for i in ids if i not in control],
+                        "control_id": control[0] if control else None,
+                        "note": f"{len(ids) - len(control)} re-runs of the planted scenario and one clean control run. Each re-run agent is a small dot near the agent it repeats.",
                     })
             elif kind == "findings":
                 finding_n += 1
@@ -198,6 +207,11 @@ def build_replay() -> dict:
                         "evidence_span_ids": f.get("evidence_span_ids") or [],
                     } for f in findings],
                 }, iso(verified["ts"]))
+    for raw in full["events"]:
+        if raw["type"] not in FROM_FULL:
+            continue
+        seq += 1
+        events.append({**raw, "seq": seq})
     events.sort(key=lambda e: (e["ts"], e["source"], e["seq"]))
     times = [datetime.fromisoformat(e["ts"].replace("Z", "+00:00")) for e in events]
     widest = max((times[i] - times[i - 1]).total_seconds() for i in range(1, len(times)))
@@ -208,7 +222,7 @@ def build_replay() -> dict:
         "label": "11 Oct 2026, run efd78263e6d2",
         "recorded": "2026-10-11",
         "agents": agents,
-        "note": "Case steps use the recorded incident timestamps. Tool calls cited in the findings are listed on the case and are not placed on the clock. Re-run guardrail blocks are not in this file.",
+        "note": "Agent calls come from the arena's request log, guardrail blocks from the re-run span logs, case steps from the incident reports. Gaps over 20 seconds are compressed and marked.",
         "cases": cases,
         "events": events,
     }
@@ -224,12 +238,13 @@ def micro(per: dict) -> tuple[float, float]:
 def build_exam() -> dict:
     v0 = json.loads((ROOT / "bench" / "results" / "v0.json").read_text(encoding="utf-8"))
     final = json.loads((ROOT / "bench" / "results" / "final.json").read_text(encoding="utf-8"))
-    labels = pd.read_parquet(ROOT / "bench" / "frozen" / "labels.parquet")
+    path = (ROOT / "bench" / "frozen" / "labels.parquet").as_posix()
+    labels = duckdb.sql(f"SELECT trace_id, category FROM read_parquet('{path}')").fetchall()
     gold: dict[str, set[str]] = defaultdict(set)
-    for row in labels.itertuples(index=False):
-        if isinstance(row.category, str) and row.category:
-            gold[row.trace_id].add(row.category)
-    ids = list(dict.fromkeys(labels.trace_id))
+    for trace_id, category in labels:
+        if isinstance(category, str) and category:
+            gold[trace_id].add(category)
+    ids = list(dict.fromkeys(trace_id for trace_id, _ in labels))
     clean = sum(1 for t in ids if not gold[t])
     violating = sum(1 for t in ids if gold[t])
     if clean != 82 or violating != 20:

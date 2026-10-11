@@ -10,6 +10,7 @@ runs/raw/
 bench/spans/
 data/
 !site/data/
+!frontend/public/data/
 runs/*.duckdb
 runs/*.duckdb.wal
 runs/ops.log
@@ -20,3 +21,6 @@ bench/results/*.tmp
 node_modules/
 runs/confirm_logs/
 runs/spans/
+.DS_Store
+frontend/.vite/
+frontend/dist/

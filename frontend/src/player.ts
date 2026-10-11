@@ -14,7 +14,6 @@ const STATE_TYPES = new Set([
   "case.transition",
   "case.failed",
   "case.patched",
-  "agent.blocked",
 ]);
 
 export class Player {

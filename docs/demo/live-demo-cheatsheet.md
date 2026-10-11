@@ -60,6 +60,8 @@ uv run python -m fleet.cli run --scenario planted_dev --agents 3
 
 Then cut to the numbers (README Results and External validation) and the cfo.ai plan page.
 
+On the landing page the Claude number is false alarms on AgentDojo's security label: 104 under v0, 26 under Bladerunner. The README's 111 and 29 count every flag on Claude runs, right or wrong. Say the number that is on screen. The "17 min skipped" mark in the replay is the watchdog being restarted during the Oct 11 run, not detection time.
+
 ## If something goes wrong
 
 | What you see | Do this |
