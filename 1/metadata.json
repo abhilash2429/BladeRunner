@@ -1,0 +1,85 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4NMHHQXZHB1T5CZFHC3S9J5",
+  "session_id": "208e0b40-8870-44cb-8fda-ea38c48beff3",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-11T14:05:55.6677835Z",
+  "branch": "main",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "docs/demo/live-demo-cheatsheet.md",
+    "tests/unit/test_pipeline.py",
+    "watchdog/daemon.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5-5",
+  "turn_id": "0c998c229cb2",
+  "checkpoint_transcript_start": 1659,
+  "transcript_lines_at_start": 1659,
+  "compact_transcript_start": 347,
+  "token_usage": {
+    "input_tokens": 42,
+    "cache_creation_tokens": 18973,
+    "cache_read_tokens": 8825298,
+    "output_tokens": 10471,
+    "api_call_count": 17
+  },
+  "session_metrics": {
+    "turn_count": 7
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-11T14:05:55.4158062Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 37,
+    "human_removed": 1075,
+    "total_committed": 0,
+    "total_lines_changed": 1112,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 3348,
+      "user_lines_removed": 1110,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "runs/archive/bench_runs-2026-10-11-v2-unactionable.jsonl": 9,
+        "runs/bench_runs.jsonl": 34,
+        "runs/incidents/1f645365f88846729f3ddd6e19448696.json": 152,
+        "runs/incidents/1f645365f88846729f3ddd6e19448696.md": 44,
+        "runs/incidents/23aa8120d9da4cab9c1ff28a90d94ceb.json": 214,
+        "runs/incidents/23aa8120d9da4cab9c1ff28a90d94ceb.md": 68,
+        "runs/incidents/3245e8e49b7e421cb7c764d544d7c49f.json": 95,
+        "runs/incidents/3245e8e49b7e421cb7c764d544d7c49f.md": 37,
+        "runs/incidents/58ded4910f3c45f98456ec6e79acca13.json": 74,
+        "runs/incidents/58ded4910f3c45f98456ec6e79acca13.md": 34,
+        "runs/incidents/6113b0afa219460481af4af059879357.json": 214,
+        "runs/incidents/6113b0afa219460481af4af059879357.md": 68,
+        "runs/incidents/7bc4ca8e1a5d4670918ecc0fe2b27a6b.json": 95,
+        "runs/incidents/7bc4ca8e1a5d4670918ecc0fe2b27a6b.md": 37,
+        "runs/incidents/8355a85a9532481b8535d8aec2ec5098.json": 117,
+        "runs/incidents/8355a85a9532481b8535d8aec2ec5098.md": 40,
+        "runs/incidents/9522c2220ac14cf6b0d000f6efd49f41.json": 152,
+        "runs/incidents/9522c2220ac14cf6b0d000f6efd49f41.md": 44,
+        "runs/incidents/c1975c8ec17d4245a96df1c8a826dae7.json": 105,
+        "runs/incidents/c1975c8ec17d4245a96df1c8a826dae7.md": 38,
+        "runs/incidents/dba9245aef7b41cea7914b2f81c59838.json": 95,
+        "runs/incidents/dba9245aef7b41cea7914b2f81c59838.md": 37,
+        "runs/incidents/dec84ddcabe74be2b14ebb2074eee3b9.json": 152,
+        "runs/incidents/dec84ddcabe74be2b14ebb2074eee3b9.md": 44,
+        "runs/incidents/f17eb08b05174a1e8a61030c6b14922c.json": 159,
+        "runs/incidents/f17eb08b05174a1e8a61030c6b14922c.md": 45,
+        "tests/unit/test_pipeline.py": 660,
+        "watchdog/daemon.py": 485
+      },
+      "user_removed_per_file": {
+        "tests/unit/test_pipeline.py": 633,
+        "watchdog/daemon.py": 477
+      }
+    }
+  ]
+}
