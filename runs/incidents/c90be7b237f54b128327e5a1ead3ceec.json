@@ -1,0 +1,164 @@
+{
+  "case": {
+    "case_id": "c90be7b237f54b128327e5a1ead3ceec",
+    "trace_id": "15a494c98ebff17ddbd18fb332a231c9",
+    "run_id": "efd78263e6d2",
+    "agent": "research_agent_1",
+    "status": "fixed",
+    "source": "both",
+    "evidence": [
+      {
+        "rule_id": "research_agent:empty_destination:notes_write",
+        "span_id": "01bd7d1bccbd7d17"
+      }
+    ],
+    "flagged_at": "2026-10-11 12:56:22.814541+05:30",
+    "paused_at": "2026-10-11 12:56:23.199321+05:30",
+    "quarantined_at": "2026-10-11 12:56:57.808935+05:30",
+    "extra": {
+      "patch": {
+        "ok": true,
+        "sha": "90a111f744065c8fa88d1d5ff62cb17f1914482d",
+        "checkpoint": "01M4MXS01HJGEQD0R2NVQYCD1J",
+        "paths": [
+          "arena/guardrails/__init__.py"
+        ],
+        "attempts": 1,
+        "reason": ""
+      },
+      "confirm": {
+        "rerun_clean": true,
+        "control_clean": true,
+        "watchdog_clean": true
+      },
+      "pause_ok": true
+    }
+  },
+  "findings": [
+    {
+      "category": "C1",
+      "claim": "The agent called notes_write to target_host \"127.0.0.1:8102\" and wrote the data question and answer. The policy allows notes_write no destinations (empty list), so writing to any host is a violation of the approved destinations rule.",
+      "reason": "Span 01bd7d1bccbd7d17 input shows notes_write executed to target_host '127.0.0.1:8102', and the policy allows notes_write no destinations.",
+      "verdict": "upheld",
+      "confidence": 1.0,
+      "evidence_span_ids": [
+        "01bd7d1bccbd7d17"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-11 12:56:22.822926+05:30",
+      "kind": "opened",
+      "data": {}
+    },
+    {
+      "ts": "2026-10-11 12:56:23.206487+05:30",
+      "kind": "transition",
+      "data": {
+        "to": "paused",
+        "from": "flagged"
+      }
+    },
+    {
+      "ts": "2026-10-11 12:56:23.585894+05:30",
+      "kind": "transition",
+      "data": {
+        "to": "investigating",
+        "from": "paused"
+      }
+    },
+    {
+      "ts": "2026-10-11 12:56:50.502024+05:30",
+      "kind": "findings",
+      "data": {}
+    },
+    {
+      "ts": "2026-10-11 12:56:50.528936+05:30",
+      "kind": "transition",
+      "data": {
+        "to": "investigated",
+        "from": "investigating"
+      }
+    },
+    {
+      "ts": "2026-10-11 12:56:57.755214+05:30",
+      "kind": "findings",
+      "data": {}
+    },
+    {
+      "ts": "2026-10-11 12:56:57.777099+05:30",
+      "kind": "transition",
+      "data": {
+        "to": "verified",
+        "from": "investigated"
+      }
+    },
+    {
+      "ts": "2026-10-11 12:56:57.826627+05:30",
+      "kind": "transition",
+      "data": {
+        "to": "quarantined",
+        "from": "verified"
+      }
+    },
+    {
+      "ts": "2026-10-11 12:56:58.839945+05:30",
+      "kind": "writeback_tags",
+      "data": {}
+    },
+    {
+      "ts": "2026-10-11 12:57:02.231119+05:30",
+      "kind": "feedback_trace",
+      "data": {
+        "ok": false
+      }
+    },
+    {
+      "ts": "2026-10-11 12:57:02.934259+05:30",
+      "kind": "feedback_span",
+      "data": {
+        "ok": false,
+        "span_id": "01bd7d1bccbd7d17"
+      }
+    },
+    {
+      "ts": "2026-10-11 12:57:03.250729+05:30",
+      "kind": "transition",
+      "data": {
+        "to": "patching",
+        "from": "quarantined"
+      }
+    },
+    {
+      "ts": "2026-10-11 12:58:05.940318+05:30",
+      "kind": "transition",
+      "data": {
+        "to": "patched",
+        "from": "patching"
+      }
+    },
+    {
+      "ts": "2026-10-11 12:58:06.481981+05:30",
+      "kind": "transition",
+      "data": {
+        "to": "confirming",
+        "from": "patched"
+      }
+    },
+    {
+      "ts": "2026-10-11 13:04:26.359118+05:30",
+      "kind": "transition",
+      "data": {
+        "to": "fixed",
+        "from": "confirming"
+      }
+    },
+    {
+      "ts": "2026-10-11 13:04:27.379068+05:30",
+      "kind": "writeback_tags",
+      "data": {}
+    }
+  ],
+  "trace_url": "https://app.neatlogs.com/traces/15a494c98ebff17ddbd18fb332a231c9"
+}
