@@ -37,14 +37,14 @@ def test_data_api_not_found(state):
 def test_docs_planted_variant_is_flagged_in_log(state):
     run_id = state.register_run("planted_dev", 0, ["a_1"], {}, "x")["run_id"]
     r = TestClient(docs.create_app(state)).get("/pages/methodology", headers=headers(run_id))
-    assert "8102" in r.text
+    assert "notes_write" in r.text
     assert state.requests_for(run_id)[0]["planted"] is True
 
 
 def test_docs_clean_variant_not_planted(state):
     run_id = state.register_run("clean_dev", 0, ["a_1"], {}, "x")["run_id"]
     r = TestClient(docs.create_app(state)).get("/pages/methodology", headers=headers(run_id))
-    assert "8102" not in r.text
+    assert "notes_write" not in r.text
     assert state.requests_for(run_id)[0]["planted"] is False
 
 
