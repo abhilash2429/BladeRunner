@@ -21,6 +21,7 @@ DENIED = {"policy/catalog.yaml"}
 UNTRACKED_RUNTIME = ("runs/", "bench/results/", "bench/frozen/")
 DEFAULT_TEST_CMD = ["uv", "run", "--frozen", "pytest", "tests/guardrails", "-q"]
 CASE_ID = re.compile(r"[A-Za-z0-9_-]{1,64}", re.ASCII)
+OPENCODE_ENV = ("AWS_BEARER_TOKEN_BEDROCK", "AWS_REGION")
 _SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", re.I)
 _SECRET_TEXT = re.compile(r"AKIA[0-9A-Z]{16}|(?i:bearer)\s+[A-Za-z0-9._~+/=-]{8,}|ghp_[A-Za-z0-9]{20,}"
                           r"|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}"
@@ -323,7 +324,8 @@ class OpenCodeRunner:
         cmd = [self.exe, "run", "Apply the attached fix request.", "--format", "json", "-m", self.model,
                "-f", str(fixreq)]
         try:
-            r = self.run(cmd, cwd=repo, capture_output=True, text=True, timeout=self.timeout, env=tool_env())
+            r = self.run(cmd, cwd=repo, capture_output=True, text=True, timeout=self.timeout,
+                         env=tool_env(keep=OPENCODE_ENV))
         except subprocess.TimeoutExpired:
             return -1, "timeout"
         except OSError as e:
@@ -433,7 +435,9 @@ class Patcher:
         except Exception:
             return None
 
-    def _attempt(self, case, findings, code: int, out: str, role: str) -> tuple[str, PatchResult | None]:
+    def _attempt(self, case, findings, code: int, out: str, role: str, start: str) -> tuple[str, PatchResult | None]:
+        if self._head() != start:
+            return "HEAD moved during patch", None
         paths = self._changed_paths()
         if code != 0:
             return f"opencode exited {code}: {redact(out)[-400:]}", None
@@ -470,27 +474,54 @@ class Patcher:
         with self._lock:
             return self._patch(case, findings, policy_text, memory_hits, evidence)
 
+    @property
+    def _marker(self) -> Path:
+        return self.fixreq_dir / ".in_progress"
+
+    def _recover(self, role: str) -> bool:
+        # A watchdog crash mid-patch leaves OpenCode's partial edits behind; only those may be cleaned up.
+        try:
+            started = self._marker.read_text(encoding="utf-8").strip()
+        except OSError:
+            return False
+        paths = self._changed_paths()
+        leftovers = [p for p in paths if not p.startswith("docs/incidents/")]
+        if started != self._head() or path_violations(leftovers, role) or self._irregular(paths):
+            return False
+        return not self._revert()
+
     def _patch(self, case, findings, policy_text: str, memory_hits: list[str], evidence: str) -> PatchResult:
         try:
             if not CASE_ID.fullmatch(str(case.case_id)):
                 return PatchResult(False, None, "invalid case id", 0)
-            if self.git.changes():
-                return PatchResult(False, None, "working tree not clean before patch", 0)
             role = role_of(case.agent)
+            if self.git.changes() and not self._recover(role):
+                return PatchResult(False, None, "working tree not clean before patch", 0)
+            start = self._head()
+            self.fixreq_dir.mkdir(parents=True, exist_ok=True)
+            self._marker.write_text(start or "", encoding="utf-8")
         except Exception as e:
             return PatchResult(False, None, f"internal error: {type(e).__name__}", 0)
+        try:
+            return self._attempts(case, findings, policy_text, memory_hits, evidence, role, start)
+        finally:
+            self._marker.unlink(missing_ok=True)
+
+    def _attempts(self, case, findings, policy_text, memory_hits, evidence, role: str, start: str) -> PatchResult:
         reason: str | None = None
         for attempt in (1, 2):
             try:
                 fixreq = write_fix_request(case, findings, policy_text, memory_hits, self.fixreq_dir, reason,
                                            evidence)
                 code, out = self.runner(fixreq, self.repo)
-                reason, result = self._attempt(case, findings, code, out, role)
+                reason, result = self._attempt(case, findings, code, out, role, start)
             except Exception as e:
                 reason, result = f"internal error: {type(e).__name__}", None
             if result and result.ok:
                 result.attempts = attempt
                 return result
+            if start and self._head() != start:
+                self.git("reset", "-q", "--mixed", start, check=False)
             leftover = self._revert()
             if result or leftover:
                 tail = f"; revert left changes: {leftover}" if leftover else ""

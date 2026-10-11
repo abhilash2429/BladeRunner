@@ -4,7 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNS_DIR = REPO_ROOT / "runs"
@@ -55,11 +55,18 @@ def _entire_plugin_bin() -> Path:
     return data / "entire" / "plugins" / "bin"
 
 
-def tool_env() -> dict[str, str]:
+def _project_env_names() -> set[str]:
+    path = REPO_ROOT / ".env"
+    return set(dotenv_values(path)) if path.is_file() else set()
+
+
+def tool_env(keep: tuple[str, ...] = ()) -> dict[str, str]:
+    """Environment for external tools: project secrets from .env are dropped unless named in keep."""
     extra = [str(Path.home() / ".local" / "bin"), str(_entire_plugin_bin())]
     git_bin = _git_bin_dir()
     if git_bin:
         extra.append(git_bin)
-    e = dict(os.environ)
+    drop = _project_env_names() - set(keep)
+    e = {k: v for k, v in os.environ.items() if k not in drop}
     e["PATH"] = os.pathsep.join(extra + [e.get("PATH", "")])
     return e

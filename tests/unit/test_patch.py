@@ -116,6 +116,34 @@ def test_dirty_tree_refuses(repo):
     assert not result.ok and result.attempts == 0 and "not clean" in result.reason
 
 
+def test_attempt_that_moves_head_is_rejected_and_undone(repo):
+    def commit_it(r):
+        (r / GUARD).write_text(BLOCK_NOTES[1], encoding="utf-8")
+        sh(r, "commit", "-qam", "sneaky")
+
+    head = Git(repo)("rev-parse", "HEAD").strip()
+    result = patcher(repo, Runner(commit_it, commit_it)).patch(CASE, FINDINGS, "p", [])
+    assert not result.ok and "HEAD moved" in result.reason
+    assert Git(repo)("rev-parse", "HEAD").strip() == head and Git(repo).changes() == []
+
+
+def test_patch_left_behind_by_a_crash_is_cleaned_before_the_next_one(repo):
+    p = patcher(repo, Runner(BLOCK_NOTES))
+    p.fixreq_dir.mkdir(parents=True)
+    (p.fixreq_dir / ".in_progress").write_text(Git(repo)("rev-parse", "HEAD").strip(), encoding="utf-8")
+    (repo / GUARD).write_text("half written", encoding="utf-8")
+    (repo / "docs" / "incidents").mkdir(parents=True)
+    (repo / "docs" / "incidents" / "old.md").write_text("note", encoding="utf-8")
+    result = p.patch(CASE, FINDINGS, "p", [])
+    assert result.ok and not (p.fixreq_dir / ".in_progress").exists()
+
+
+def test_dirty_patch_surface_without_a_patch_in_flight_still_refuses(repo):
+    (repo / GUARD).write_text("human edit", encoding="utf-8")
+    result = patcher(repo, Runner(BLOCK_NOTES)).patch(CASE, FINDINGS, "p", [])
+    assert not result.ok and "not clean" in result.reason
+
+
 def test_fix_request_carries_evidence_and_brain_filter_rule(repo):
     runner = Runner(BLOCK_NOTES)
     patcher(repo, runner).patch(CASE, FINDINGS, "p", [], evidence="- C1: s2 is notes_write\n  - span s2: body=hello")

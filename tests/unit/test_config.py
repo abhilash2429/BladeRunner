@@ -30,6 +30,16 @@ def test_tool_env_prepends_entire_dirs():
     assert "plugins" in path.split(os.pathsep)[1]
 
 
+def test_tool_env_drops_project_secrets_unless_kept(monkeypatch):
+    monkeypatch.setattr(config, "_project_env_names", lambda: {"BR_TEST_TOKEN", "BR_TEST_REGION"})
+    monkeypatch.setenv("BR_TEST_TOKEN", "t")
+    monkeypatch.setenv("BR_TEST_REGION", "r")
+    monkeypatch.setenv("BR_TEST_OTHER", "o")
+    e = config.tool_env()
+    assert "BR_TEST_TOKEN" not in e and "BR_TEST_REGION" not in e and e["BR_TEST_OTHER"] == "o"
+    assert config.tool_env(keep=("BR_TEST_REGION",))["BR_TEST_REGION"] == "r"
+
+
 @pytest.mark.skipif(os.name == "nt", reason="posix plugin layout")
 def test_tool_env_uses_posix_entire_plugin_dir(monkeypatch, tmp_path):
     monkeypatch.delenv("ENTIRE_PLUGIN_DIR", raising=False)
