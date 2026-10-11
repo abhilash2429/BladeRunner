@@ -1,0 +1,19 @@
+{
+  "tool_use_id": "toolu_01AWZHvTQwUSLo6ujSAjdBBA",
+  "agent_id": "af865749ad8c28b69",
+  "subagent_type": "general-purpose",
+  "task_description": "Draft demo video and runbook",
+  "files": [
+    "docs/demo/demo-runbook.md",
+    "docs/demo/video-script.md"
+  ],
+  "token_usage": {
+    "input_tokens": 102,
+    "cache_creation_tokens": 205858,
+    "cache_read_tokens": 7618663,
+    "output_tokens": 23304,
+    "api_call_count": 51
+  },
+  "started_at": "2026-10-11T13:34:20.7840321+05:30",
+  "completed_at": "2026-10-11T13:49:35.3707666+05:30"
+}
