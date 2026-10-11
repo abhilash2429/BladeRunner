@@ -1,0 +1,52 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4MNHG1P341X3CCBGTE8GVFQ",
+  "session_id": "ses_ed6a81a2bffebhrBw8sSRk9O5j",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-11T05:04:05.9402728Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "arena/guardrails/__init__.py"
+  ],
+  "agent": "OpenCode",
+  "model": "zai.glm-5",
+  "turn_id": "11fd64174b54",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 263031,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 674,
+    "api_call_count": 8
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-11T05:04:05.9107854Z",
+    "agent_lines": 9,
+    "agent_removed": 0,
+    "human_added": 3,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 12,
+    "total_lines_changed": 12,
+    "agent_percentage": 75,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 143,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "runs/incidents/c1975c8ec17d4245a96df1c8a826dae7.json": 105,
+        "runs/incidents/c1975c8ec17d4245a96df1c8a826dae7.md": 38
+      }
+    }
+  ]
+}
