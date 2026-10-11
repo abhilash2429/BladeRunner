@@ -1,0 +1,2 @@
+propose a frontend that can be both used as landing page and show the working , like swarning the agents and kind of something like that
+do not write the frontend urself but write it in a file of the architecvture and flow and kind of those things and get back to me
