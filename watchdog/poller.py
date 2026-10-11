@@ -7,6 +7,7 @@ from common.policy import role_of
 from watchdog.compiler import Rule, evaluate_trace
 
 PENDING = "pending:"
+FAILED = ("dlq", "failed")
 
 
 @dataclass
@@ -94,6 +95,10 @@ class Poller:
     def _consider(self, info, flags: list[Flag]) -> None:
         if not info.agent or self._skip(info):
             self.state.kv_delete(PENDING + info.trace_id)
+            return
+        if info.finalization in FAILED:
+            self.state.kv_delete(PENDING + info.trace_id)
+            self._record_error(RuntimeError(), f"trace {info.trace_id} {info.finalization} in neatlogs, skipped")
             return
         if info.finalization != "finalized":
             self._track_pending(info.trace_id)

@@ -291,3 +291,12 @@ def test_evaluation_error_marks_trace_seen_without_refetching(tmp_path, monkeypa
     p.tick()
     assert p.source.span_calls == calls
 
+
+
+def test_dead_lettered_trace_is_dropped_at_once_and_reported(tmp_path):
+    p, st = make(tmp_path)
+    info, spans = p.source.traces["t_bad"]
+    p.source.traces["t_bad"] = (TraceInfo(info.trace_id, info.session_id, info.agent, info.tags, 0, "dlq", ""), spans)
+    assert p.tick() == []
+    assert st.kv_keys("pending:") == [] and "t_bad" in st.kv_get("last_poll_error")
+    assert "dlq" in st.kv_get("last_poll_error") and st.case_for_trace("t_bad") is None
