@@ -344,3 +344,8 @@ ok keep going, restart session if needed for cfo
   - **Q8. Entire Graph.** It's dev-time only: OpenCode's bash is denied except pytest, so it can't use Graph at runtime. Do you want the optional `entire graph query` shot, or is it skipped?
   - **Q9. Live patch commits.** Revert them after the take like Oct 11? The runbook leaves this to you and says don't push until you decide.
 </agent-message>
+
+---
+
+commit any leftovers, friend is gonna work on the frontend ,
+so remote should be updated ?
