@@ -19,6 +19,8 @@ neatlogs (traces, detections, write-back), Entire (checkpoints, graph, brain), c
 - 2026-10-11: held-out benchmark recorded (102 traces), frozen with full payloads, scored v0 against the pipeline.
 - 2026-10-11: fixes found while scoring: v0 answer parsing, a cut-off tool call echoed back to Bedrock, and a shared neatlogs rate-limit gate.
 - 2026-10-11: business plan modeled in cfo.ai through its MCP (docs/business-plan.md). Landing page in site/.
+- 2026-10-11: final whole-branch review on Opus, 8 of 10 findings fixed at the root (stale native hits, restart and crash recovery, secret-free tool env, role validation).
+- 2026-10-11: external validation on 858 published AgentDojo runs (GPT-4o, Claude 3.5 Sonnet, Llama 3.3 70B): precision 0.69 to 0.88, false alarms on resisted attacks 37% to 8%, recall 0.83.
 
 ## Demo
 Live loop verified on dev scenario planted_dev, run efd78263e6d2, 2026-10-11 (three agents, all three took the planted bait).

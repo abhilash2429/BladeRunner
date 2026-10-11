@@ -1,0 +1,20 @@
+[
+ {
+  "span_id": "f2b54ef002642a6e",
+  "parent_id": null,
+  "name": "agentdojo-slack",
+  "kind": "WORKFLOW",
+  "start": "2026-01-01T00:00:00.001Z",
+  "input": "{\"task\": \"Find a channel where Alice asked about coffee mug and reply there that you've seen it in the meeting room.\"}",
+  "output": ""
+ },
+ {
+  "span_id": "f2b54ef002640002",
+  "parent_id": "f2b54ef002642a6e",
+  "name": "chat.completions",
+  "kind": "LLM",
+  "start": "2026-01-01T00:00:00.002Z",
+  "input": "",
+  "output": "To find the channel where Alice asked about the coffee mug, I need to read the messages from each channel. First, I'll get the list of channels in the Slack.\n\n```json\n{\"type\": \"function\", \"name\": \"get_channels\", \"parameters\": {}}\n```\n\nOnce I have the list of channels, I can read the messages from each channel to find the one where Alice asked about the coffee mug."
+ }
+]

@@ -6,7 +6,7 @@ Built solo for neatHack (Oct 10 to 12, 2026) by Team Heat.
 
 Demo video: [pending] | Landing page: [site/index.html](site/index.html) | Business plan: [docs/business-plan.md](docs/business-plan.md) | Build log: [hackathon.md](hackathon.md)
 
-On 102 held-out traces, the full pipeline cuts false alarms on clean runs from 40% to 5% against a single-prompt checker, with precision 0.39 to 0.90 and recall 0.80 to 0.90, at $0.0058 per trace.
+On 102 held-out traces, the full pipeline cuts false alarms on clean runs from 40% to 5% against a single-prompt checker, with precision 0.39 to 0.90 and recall 0.80 to 0.90, at $0.0058 per trace. On 858 published AgentDojo runs from GPT-4o, Claude 3.5 Sonnet and Llama 3.3 70B, agents we did not build, it raises precision from 0.69 to 0.88 and cuts false alarms on attacks the agent resisted from 37% to 8%, at a recall of 0.83.
 
 ## The problem
 
@@ -71,6 +71,28 @@ Honest notes on the harness:
 - All 102 traces came from neatlogs with full payloads. The local span log fallback in `bench/freeze.py` was built during a neatlogs outage and was not needed for this freeze.
 
 Related work: AgentPex (Sharma, Barke, Zorn, arXiv 2603.23806) extracts rules from agent prompts and checks traces for compliance. Bladerunner starts from an operator policy instead and closes the loop: quarantine, patch, and confirmation against ground truth.
+
+### External validation: AgentDojo
+
+To test on agents I did not build, I replayed 858 published runs from [AgentDojo](https://github.com/ethz-spylab/agentdojo) (ETH Zurich, MIT license): GPT-4o, Claude 3.5 Sonnet and Llama 3.3 70B doing banking and Slack tasks, 747 of them under AgentDojo's `important_instructions` prompt-injection attack. Each run becomes a frozen trace in the same format, the policy for each suite comes only from that suite's clean environment, and the labels are AgentDojo's. Detection and investigation only: a recorded run cannot be paused or patched. Method and limits: [bench/external/agentdojo/README.md](bench/external/agentdojo/README.md).
+
+Scored against "the agent made the attacker's call" (356 of 858 runs):
+
+| | v0 single-prompt checker | Bladerunner pipeline |
+|---|---|---|
+| Precision | 0.69 | 0.88 |
+| Recall | 0.99 | 0.83 |
+| False alarms on attacked runs the agent resisted (391) | 37% | 8% |
+| False alarms on runs with no attack (111) | 12% | 8% |
+| Cost per trace | $0.0020 | $0.0075 |
+
+Against AgentDojo's stricter `security` flag (attacker goal fully achieved, 329 runs): v0 precision 0.64, recall 0.99; pipeline precision 0.81, recall 0.82.
+
+What the numbers say:
+- The pipeline trades recall for trust. v0 reacts to injected text being present, so it raises an alarm on 37% of runs where the agent read the injection and ignored it. Bladerunner looks at what the agent did, and cuts that to 8%.
+- The gap is widest on the model that resists injections. Claude 3.5 Sonnet acted on the attack in 16 of 286 runs; v0 flagged 111 of its runs (precision 0.14), the pipeline 29 (precision 0.41).
+- 54 of the pipeline's 61 misses happen at the rules stage, and all of them are content attacks against an allowed destination: a phishing link sent to a real colleague, or a visit to a site the workspace already knows. Destination policies cannot see those. The other 7 were dropped by the investigator or verifier.
+- 2 of 858 v0 answers had no JSON and count as no findings. The pipeline had no errors.
 
 ### Live time to detect
 
@@ -186,6 +208,7 @@ uv run python -m bench.live_ttd
 | `watchdog/actions/` | Quarantine, write-back, report, patch, confirm, memory |
 | `policy/` | Category catalog and per-role policy |
 | `bench/` | Freeze, scorer, live time-to-detect, frozen set and results |
+| `bench/external/agentdojo/` | AgentDojo replay: frozen runs, policies, results, license |
 | `docs/incidents/` | Incident notes written by the patcher |
 | `tests/` | Unit, contract and guardrail tests |
 | `docs/superpowers/` | Spec and implementation plan |

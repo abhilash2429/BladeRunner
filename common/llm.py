@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -58,6 +59,9 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
+_LEDGER_LOCK = threading.Lock()
+
+
 class SpendLedger:
     def __init__(self, path: Path, litellm_cap_usd: float = 18.0):
         self.path = Path(path)
@@ -75,7 +79,7 @@ class SpendLedger:
         usd = self.cost(model, prompt, completion)
         row = {"ts": time.time(), "model": model, "provider": provider,
                "prompt": prompt, "completion": completion, "usd": usd, "tag": tag}
-        with self.path.open("a", encoding="utf-8") as f:
+        with _LEDGER_LOCK, self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(row) + "\n")
         return usd
 
