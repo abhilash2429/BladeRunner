@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -100,7 +101,7 @@ def _data(body):
 
 class NeatlogsClient:
     def __init__(self, token: str, project_id: str, base: str = BASE, http: httpx.Client | None = None,
-                 sleep=time.sleep, ops_log: Path | None = None, max_attempts: int = 5):
+                 sleep=time.sleep, ops_log: Path | None = None, max_attempts: int = 5, clock=time.monotonic):
         self.token = token
         self.project_id = project_id
         self.base = base
@@ -108,6 +109,9 @@ class NeatlogsClient:
         self.sleep = sleep
         self.ops_log = ops_log
         self.max_attempts = max_attempts
+        self.clock = clock
+        self._gate = threading.Lock()
+        self._not_before = 0.0
 
     @classmethod
     def from_env(cls, **kwargs) -> "NeatlogsClient":
@@ -119,20 +123,36 @@ class NeatlogsClient:
             with self.ops_log.open("a", encoding="utf-8") as f:
                 f.write(f"{_iso(datetime.now(timezone.utc))} {message}\n")
 
+    def _hold(self, delay: float) -> None:
+        with self._gate:
+            self._not_before = max(self._not_before, self.clock() + delay)
+
+    def _wait_turn(self) -> None:
+        with self._gate:
+            delay = self._not_before - self.clock()
+        if delay > 0:
+            self.sleep(delay)
+
     def request(self, method: str, path: str, *, params=None, json_body=None, idempotency_key=None) -> dict:
         headers = {"Authorization": f"Bearer {self.token}", "x-project-id": self.project_id}
         if idempotency_key:
             headers["idempotency-key"] = idempotency_key
         for attempt in range(self.max_attempts):
+            self._wait_turn()
             r = self.http.request(method, self.base + path, params=params, json=json_body, headers=headers)
-            retryable = r.status_code in (429, 503) or (
-                method == "GET" and r.status_code == 409 and "TRACE_PROCESSING" in r.text)
+            rate_limited = r.status_code in (429, 503)
+            retryable = rate_limited or (method == "GET" and r.status_code == 409 and "TRACE_PROCESSING" in r.text)
+            delay = retry_delay(r.headers, attempt) if retryable else 0.0
+            if rate_limited:
+                self._hold(delay)
             if retryable and attempt < self.max_attempts - 1:
-                delay = retry_delay(r.headers, attempt)
                 self._log(f"backoff {r.status_code} {method} {path} {delay:.1f}s "
                           f"remaining={r.headers.get('ratelimit-remaining')}")
-                self.sleep(delay)
+                if not rate_limited:
+                    self.sleep(delay)
                 continue
+            if r.headers.get("ratelimit-remaining") == "0" and r.headers.get("ratelimit-reset"):
+                self._hold(retry_delay({"ratelimit-reset": r.headers["ratelimit-reset"]}, attempt))
             if r.status_code >= 400:
                 raise NeatlogsError(r.status_code, r.text)
             return r.json() if r.content else {}

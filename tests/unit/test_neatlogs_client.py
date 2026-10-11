@@ -20,9 +20,44 @@ from watchdog.neatlogs_client import (
 
 def client_with(handler, tmp_path=None):
     sleeps = []
+    now = [0.0]
+
+    def sleep(d):
+        sleeps.append(d)
+        now[0] += d
+
     c = NeatlogsClient("tok", "proj", http=httpx.Client(transport=httpx.MockTransport(handler)),
-                       sleep=sleeps.append, ops_log=(tmp_path / "ops.log") if tmp_path else None)
+                       sleep=sleep, clock=lambda: now[0], ops_log=(tmp_path / "ops.log") if tmp_path else None)
     return c, sleeps
+
+
+def test_rate_limit_backoff_holds_every_caller():
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.path)
+        if len(calls) == 1:
+            return httpx.Response(429, headers={"Retry-After": "4"})
+        return httpx.Response(200, json={"data": {"id": "t"}})
+
+    c, sleeps = client_with(handler)
+    c.get_trace("t1")
+    assert sleeps == [4.0] and c._not_before == 4.0
+    c._hold(2.5)
+    c.get_trace("t2")
+    assert sleeps == [4.0, 2.5]
+
+
+def test_exhausted_rate_limit_window_paces_the_next_request():
+    def handler(req):
+        return httpx.Response(200, headers={"ratelimit-remaining": "0", "ratelimit-reset": "3"},
+                              json={"data": {"id": "t"}})
+
+    c, sleeps = client_with(handler)
+    c.get_trace("t1")
+    assert sleeps == []
+    c.get_trace("t2")
+    assert sleeps == [3.0]
 
 
 def test_headers_and_backoff_on_429(tmp_path):
