@@ -1,0 +1,7 @@
+the remote has a new frontend, can u check if everythings clean and wire it up for our demo so that evrything can go right 
+check and ask me questions if any 
+its changed and propose changes if any and tell me what needs to be done and then u can proceed
+
+---
+
+1a, yes to full export, go ahead

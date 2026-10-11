@@ -3,9 +3,48 @@
   "checkpoint_id": "01M4NZZ4A8Y79HJW2FKDNM0NDS",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 5,
+  "checkpoints_count": 6,
   "files_touched": [
-    "site/index.html"
+    ".DS_Store",
+    ".github/workflows/pages.yml",
+    ".gitignore",
+    "bench/replay.py",
+    "bench/site_data.py",
+    "docs/demo/live-demo-cheatsheet.md",
+    "docs/frontend/proposal.md",
+    "frontend/.vite/deps/_metadata.json",
+    "frontend/.vite/deps/chunk-Q67RBLKN.js",
+    "frontend/.vite/deps/chunk-Q67RBLKN.js.map",
+    "frontend/.vite/deps/package.json",
+    "frontend/.vite/deps/react-dom_client.js",
+    "frontend/.vite/deps/react-dom_client.js.map",
+    "frontend/.vite/deps/react.js",
+    "frontend/.vite/deps/react.js.map",
+    "frontend/.vite/deps/react_jsx-dev-runtime.js",
+    "frontend/.vite/deps/react_jsx-dev-runtime.js.map",
+    "frontend/package-lock.json",
+    "frontend/package.json",
+    "frontend/public/README.md",
+    "frontend/public/data/benchmarks.json",
+    "frontend/public/data/dojo.json",
+    "frontend/public/data/exam.json",
+    "frontend/public/replay/efd78263e6d2.full.json",
+    "frontend/public/replay/efd78263e6d2.json",
+    "frontend/scripts/build_public_data.py",
+    "frontend/src/draw.ts",
+    "frontend/src/mission.tsx",
+    "frontend/src/model.test.ts",
+    "frontend/src/player.ts",
+    "frontend/src/public.test.ts",
+    "frontend/src/reduce.ts",
+    "frontend/src/types.ts",
+    "package-lock.json",
+    "site/README.md",
+    "site/assets/index-BgXLptKg.js",
+    "site/assets/index-CWMbSoa2.js",
+    "site/index.html",
+    "site/replay/README.md",
+    "site/replay/efd78263e6d2.json"
   ],
   "sessions": [
     {
@@ -21,13 +60,20 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "compact_transcript": "/2/transcript.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1938,
-    "cache_creation_tokens": 2116640,
-    "cache_read_tokens": 247882892,
-    "output_tokens": 672121,
-    "api_call_count": 923
+    "input_tokens": 2052,
+    "cache_creation_tokens": 2261101,
+    "cache_read_tokens": 255532200,
+    "output_tokens": 711861,
+    "api_call_count": 980
   }
 }
