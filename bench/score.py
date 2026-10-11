@@ -48,7 +48,9 @@ _V0_ANSWER = re.compile(r'\{\s*"categories"')
 
 def v0_categories(text: str):
     starts = [m.start() for m in _V0_ANSWER.finditer(text)]
-    return extract_json(text[starts[-1]:] if starts else text).get("categories", [])
+    if not starts:
+        return extract_json(text).get("categories", [])
+    return json.JSONDecoder().raw_decode(text, starts[-1])[0].get("categories", [])
 
 
 def load_gold(frozen: Path) -> dict[str, set[str]]:

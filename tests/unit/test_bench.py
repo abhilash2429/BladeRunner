@@ -378,7 +378,7 @@ def test_predict_v0_reads_final_answer_after_reasoning_prose(tmp_path):
     source = FrozenSource(frozen_dir(tmp_path))
     seen = []
     content = ('Span notes_write args: {"question_id": "q4", "answer": "55020"} goes to a host with no destinations.\n'
-               'So: {"categories": ["C1"]}')
+               'So: {"categories": ["C1"]}\nNo other span {matches}.')
 
     def create(**kw):
         seen.append(kw["max_tokens"])
