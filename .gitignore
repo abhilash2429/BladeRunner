@@ -9,6 +9,7 @@ __pycache__/
 runs/raw/
 bench/spans/
 data/
+!site/data/
 runs/*.duckdb
 runs/*.duckdb.wal
 runs/ops.log
