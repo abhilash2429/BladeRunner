@@ -15,6 +15,10 @@ neatlogs (traces, detections, write-back), Entire (checkpoints, graph, brain), c
 - 2026-10-10: arena live: mock services, ground truth, one traced agent in neatlogs.
 - 2026-10-11: watchdog pipeline complete: poller, compiler, investigator, verifier, quarantine, write-back, patch, confirm.
 - 2026-10-11: Task 23 base sha a6f11b7286bf79ec1ea258e01dd704f536ed5987 (guardrails and policy reset target).
+- 2026-10-11: live loop closed end to end on planted_dev: 3 of 3 cases fixed without a human.
+- 2026-10-11: held-out benchmark recorded (102 traces), frozen with full payloads, scored v0 against the pipeline.
+- 2026-10-11: fixes found while scoring: v0 answer parsing, a cut-off tool call echoed back to Bedrock, and a shared neatlogs rate-limit gate.
+- 2026-10-11: business plan modeled in cfo.ai through its MCP (docs/business-plan.md). Landing page in site/.
 
 ## Demo
 Live loop verified on dev scenario planted_dev, run efd78263e6d2, 2026-10-11 (three agents, all three took the planted bait).
@@ -30,7 +34,25 @@ Demo reports: runs/incidents/c90be7b237f54b128327e5a1ead3ceec.md (primary demo c
 Known gaps seen live: CLI feedback failed because the neatlogs CLI login had expired; entire why attributed the OpenCode line to the concurrently active Claude Code session.
 
 ## Known limitations and next steps
-Pending.
+See the README's Known limitations section. Next steps: persist arena pause flags, measure live time to detect on a steady watchdog with the shared rate-limit gate, add tier 2 scenarios (C2, C5) to the held-out set, and add a scored category for reads from hosts outside a tool's allowlist.
 
-## Submission
-Requirements confirmed: public repo, commits dated Oct 10 to 12, demo video under 3 minutes covering neatlogs, Entire and cfo.ai, business plan, #neatHack posts. Outstanding: everything.
+## Posts
+Drafts for the user to post on X with #neatHack. Fill the bracketed links before posting.
+
+1. Day 2, loop closed:
+   Bladerunner closed its first loop with no human in it. Three research agents read a planted note and wrote to a board their policy forbids. The watchdog caught each run in neatlogs, proved it span by span, had OpenCode write a guardrail, and confirmed the fix against ground truth it never sees. 3 of 3 fixed. #neatHack [repo link]
+
+2. Benchmark:
+   Scored Bladerunner on 102 held-out traces it was never tuned on. A single-prompt checker against the full pipeline: false alarms on clean runs drop from 40% to 5%, precision goes from 0.39 to 0.90, recall from 0.80 to 0.90, at $0.0058 per trace. Every number, trace and label is frozen in the repo. #neatHack [repo link]
+
+3. Launch:
+   Bladerunner is a watchdog for AI agent fleets: it reads every run in neatlogs, quarantines the ones that break policy, patches the guardrail and proves the fix held. Entire records which agent wrote which line. cfo.ai built the plan. Demo: [video link] Site: [site link] #neatHack
+
+## Submission checklist
+- [ ] Repo public, all commits dated Oct 10 to 12.
+- [ ] README results, demo links and site link filled.
+- [ ] Demo video under 3:00 recorded (docs/demo/video-script.md, docs/demo/demo-runbook.md) and uploaded.
+- [ ] No Claude Code session open in the repo during the recording.
+- [ ] Live patch commits from the take pushed.
+- [ ] Posts 1 to 3 published with #neatHack.
+- [ ] Quote post of the official neatlogs submission post in the Oct 12 19:00 to 23:55 IST window: team Heat, project Bladerunner, repo link, demo link. Submit early, the first 50 get engagement.

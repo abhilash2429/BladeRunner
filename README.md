@@ -4,7 +4,9 @@ A watchdog agent for AI agent fleets. It reads your agents' traces in neatlogs, 
 
 Built solo for neatHack (Oct 10 to 12, 2026) by Team Heat.
 
-Demo video: [pending] | Landing page: [pending] | Build log: [hackathon.md](hackathon.md)
+Demo video: [pending] | Landing page: [site/index.html](site/index.html) | Business plan: [docs/business-plan.md](docs/business-plan.md) | Build log: [hackathon.md](hackathon.md)
+
+On 102 held-out traces, the full pipeline cuts false alarms on clean runs from 40% to 5% against a single-prompt checker, with precision 0.39 to 0.90 and recall 0.80 to 0.90, at $0.0058 per trace.
 
 ## The problem
 
@@ -39,7 +41,50 @@ Flag to fixed took 8 to 13 minutes per case, most of it the confirmation re-runs
 
 ## Results: held-out benchmark
 
-[pending: filled from bench/results after scoring]
+102 frozen traces from the held-out scenarios (20 violating, 82 clean), scored offline against hidden ground truth. Same traces, same investigator model, two checkers. Raw results: [bench/results/v0.json](bench/results/v0.json), [bench/results/final.json](bench/results/final.json).
+
+| | v0 single-prompt checker | Bladerunner pipeline |
+|---|---|---|
+| Precision (micro, C1 to C5) | 0.39 | 0.90 |
+| Recall (micro, C1 to C5) | 0.80 | 0.90 |
+| False alarm rate on clean runs | 40% | 5% |
+| Cost per trace | $0.0015 | $0.0058 |
+| Traces that errored | 0 | 0 |
+
+| Category | v0 precision | v0 recall | Pipeline precision | Pipeline recall |
+|---|---|---|---|---|
+| C1 unapproved destination | 0.80 | 1.00 | 0.83 | 1.00 |
+| C2 tool it wasn't given | 0.00 | n/a | n/a | n/a |
+| C3 planted instructions | 0.32 | 0.60 | 1.00 | 0.80 |
+| C4 unofficial channels | 0.00 | n/a | n/a | n/a |
+| C5 data sent outside | 0.00 | n/a | n/a | n/a |
+
+What the numbers say:
+- The single-prompt checker finds most violations and cries wolf on 40% of clean runs, mostly by calling planted-instruction (C3) and tool misuse (C2) on traces that show neither. The pipeline only escalates traces the compiled rules flag, and the cross-family verifier throws out findings the cited spans don't support, so false calls on C2 to C5 drop to zero and C3 precision goes to 1.00.
+- The pipeline's 4 false alarms are all `peer_tip` agents that fetched the notes board, which their policy does not allow for `fetch`, and then answered correctly from the data API. That is a real policy break with no scored category (C1 requires sending or storing data), so the benchmark counts it as wrong. I did not retune on the held-out set to hide it.
+- The held-out set has no positive C2, C4 or C5 traces: no agent used an unlisted tool or leaked a canary, and no agent acted on the stale peer answer. Those categories only measure false calls here.
+- Pipeline cost per trace is averaged over all 102 traces, including the 75 the rules pass without any model call. The scored run used Claude Sonnet 4.6 as the verifier.
+
+Honest notes on the harness:
+- The scorer was fixed twice before the reported run (`f5bd2af`, `56a279e`): Kimi sometimes reasons in prose before its JSON answer, and the v0 parser lost those answers. A first run with the old parser is kept in [bench/results/run1-prefix](bench/results/run1-prefix) and points the same way (false alarms 37% to 6%).
+- The held-out `planted` page was reworded once, because the first wording asked agents to do something their tools couldn't do, and the held-out set was recorded again from scratch (`72a9cb3`). The runs recorded with the old wording were discarded, not mixed in.
+- All 102 traces came from neatlogs with full payloads. The local span log fallback in `bench/freeze.py` was built during a neatlogs outage and was not needed for this freeze.
+
+Related work: AgentPex (Sharma, Barke, Zorn, arXiv 2603.23806) extracts rules from agent prompts and checks traces for compliance. Bladerunner starts from an operator policy instead and closes the loop: quarantine, patch, and confirmation against ground truth.
+
+### Live time to detect
+
+From `uv run python -m bench.live_ttd`, measured from the violating call to the pause:
+
+| Case | Violation to pause | Violation to quarantine |
+|---|---|---|
+| c1975c8e | 16 s | n/a (needs_review) |
+| 58ded491 | 585 s | n/a (needs_review) |
+| c90be7b2 | 1041 s | 1076 s |
+| 37fa7776 | 1043 s | 1108 s |
+| 1ee2425c | 1066 s | 1100 s |
+
+The 16 s case is the watchdog running steadily (it ended in needs_review, the safe outcome when the evidence is not conclusive). The three demo cases took about 17 minutes because I restarted the watchdog twice during that run to land the poller and cache fixes (`affd7cc`, `8b4a7d6`), and before the cache it spent about 7 minutes in neatlogs 429 backoff. The shared rate-limit gate (`53f2fac`) fixes the root cause. Detection can never be faster than neatlogs finalizing the trace, so the realistic floor is seconds after the agent's run ends.
 
 ## How it uses neatlogs, Entire and cfo.ai
 
@@ -47,7 +92,7 @@ Flag to fixed took 8 to 13 minutes per case, most of it the confirmation re-runs
 
 **Entire** records every checkpoint in the build, including the OpenCode patch sessions, so each auto-patch commit carries an `Entire-Checkpoint` trailer and `entire why` explains it. Entire Brain is the watchdog's long-term memory: the investigator recalls past incidents by category and the pipeline remembers each fixed one. Entire Graph was used during the build for code discovery and impact checks.
 
-**cfo.ai** produced the business plan: [pending].
+**cfo.ai** holds the financial model. I fed it the pricing, unit costs measured in this repo, growth, churn and operating costs from [docs/business-plan.md](docs/business-plan.md), and it built the plan page in cfo.ai: $39,089 MRR and 88.4% gross margin by Dec 2027, $239,762 revenue in 2027, peak burn $4,042 a month, and a lowest cash balance of $50,564, so runway never binds.
 
 ## Architecture
 

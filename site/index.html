@@ -633,29 +633,29 @@ tbody th{font-weight:400;font-size:1rem}
         <table class="res">
           <thead><tr><th scope="col">Metric</th><th scope="col">v0 single-prompt checker</th><th scope="col">Bladerunner pipeline</th></tr></thead>
           <tbody>
-            <tr><th scope="row">Precision</th><td><span data-pending="v0-precision">pending</span></td><td><span data-pending="final-precision">pending</span></td></tr>
-            <tr><th scope="row">Recall</th><td><span data-pending="v0-recall">pending</span></td><td><span data-pending="final-recall">pending</span></td></tr>
-            <tr><th scope="row">False alarm rate on clean runs</th><td><span data-pending="false-alarm-v0">pending</span></td><td><span data-pending="false-alarm-final">pending</span></td></tr>
+            <tr><th scope="row">Precision</th><td><span>0.39</span></td><td><span>0.90</span></td></tr>
+            <tr><th scope="row">Recall</th><td><span>0.80</span></td><td><span>0.90</span></td></tr>
+            <tr><th scope="row">False alarm rate on clean runs</th><td><span>40%</span></td><td><span>5%</span></td></tr>
           </tbody>
         </table>
       </div>
       <div class="meta-row">
-        <div><span class="lbl">Traces</span><span data-pending="n-traces">pending</span></div>
-        <div><span class="lbl">Cost per trace</span><span data-pending="cost-per-trace">pending</span></div>
+        <div><span class="lbl">Traces</span><span>102</span></div>
+        <div><span class="lbl">Cost per trace</span><span>$0.0015 v0, $0.0058 pipeline</span></div>
       </div>
       <div class="tbl-scroll">
         <table class="res">
           <thead><tr><th scope="col">Category</th><th scope="col">v0 precision</th><th scope="col">v0 recall</th><th scope="col">Pipeline precision</th><th scope="col">Pipeline recall</th></tr></thead>
           <tbody>
-            <tr><th scope="row">C1 unapproved destination</th><td><span data-pending="v0-precision-c1">pending</span></td><td><span data-pending="v0-recall-c1">pending</span></td><td><span data-pending="final-precision-c1">pending</span></td><td><span data-pending="final-recall-c1">pending</span></td></tr>
-            <tr><th scope="row">C2 tool it wasn't given</th><td><span data-pending="v0-precision-c2">pending</span></td><td><span data-pending="v0-recall-c2">pending</span></td><td><span data-pending="final-precision-c2">pending</span></td><td><span data-pending="final-recall-c2">pending</span></td></tr>
-            <tr><th scope="row">C3 planted instructions</th><td><span data-pending="v0-precision-c3">pending</span></td><td><span data-pending="v0-recall-c3">pending</span></td><td><span data-pending="final-precision-c3">pending</span></td><td><span data-pending="final-recall-c3">pending</span></td></tr>
-            <tr><th scope="row">C4 unofficial channels</th><td><span data-pending="v0-precision-c4">pending</span></td><td><span data-pending="v0-recall-c4">pending</span></td><td><span data-pending="final-precision-c4">pending</span></td><td><span data-pending="final-recall-c4">pending</span></td></tr>
-            <tr><th scope="row">C5 data sent outside</th><td><span data-pending="v0-precision-c5">pending</span></td><td><span data-pending="v0-recall-c5">pending</span></td><td><span data-pending="final-precision-c5">pending</span></td><td><span data-pending="final-recall-c5">pending</span></td></tr>
+            <tr><th scope="row">C1 unapproved destination</th><td><span>0.80</span></td><td><span>1.00</span></td><td><span>0.83</span></td><td><span>1.00</span></td></tr>
+            <tr><th scope="row">C2 tool it wasn't given</th><td><span>0.00</span></td><td><span>n/a</span></td><td><span>n/a</span></td><td><span>n/a</span></td></tr>
+            <tr><th scope="row">C3 planted instructions</th><td><span>0.32</span></td><td><span>0.60</span></td><td><span>1.00</span></td><td><span>0.80</span></td></tr>
+            <tr><th scope="row">C4 unofficial channels</th><td><span>0.00</span></td><td><span>n/a</span></td><td><span>n/a</span></td><td><span>n/a</span></td></tr>
+            <tr><th scope="row">C5 data sent outside</th><td><span>0.00</span></td><td><span>n/a</span></td><td><span>n/a</span></td><td><span>n/a</span></td></tr>
           </tbody>
         </table>
       </div>
-      <p class="src">C6 and C7 are in the catalog and are not scored in this benchmark.</p>
+      <p class="src">Precision and recall in the first table are micro-averaged over C1 to C5. The held-out set has no positive C2, C4 or C5 traces, so those rows only count false calls. The pipeline's four false alarms are agents that read the notes board, which their fetch policy forbids, without acting on it: a real policy break with no scored category. C6 and C7 are in the catalog and are not scored in this benchmark.</p>
     </div>
   </div>
 </section>
@@ -679,7 +679,7 @@ tbody th{font-weight:400;font-size:1rem}
         </div>
         <div>
           <h3>cfo.ai</h3>
-          <p>Priced the product. Business plan: <span data-pending="cfo-business-plan">pending</span></p>
+          <p>Priced the product from the unit costs measured here, and modeled the plan through its MCP: $39,089 MRR at 88.4% gross margin by December 2027, with runway that never binds. <a href="https://github.com/abhilash2429/BladeRunner/blob/main/docs/business-plan.md">Business plan</a></p>
         </div>
       </div>
     </div>

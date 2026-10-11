@@ -24,7 +24,7 @@ Measured in this repo, from `runs/spend.jsonl` and the benchmark:
 
 - Local rule evaluation runs on every trace and costs no model spend.
 - Only flagged traces reach the investigator and verifier. Measured cost per investigated case on Oct 11: $0.0097 (Kimi K2.5 investigator plus DeepSeek verifier on Bedrock).
-- Benchmark cost per trace, all traces included: [pending from bench/results].
+- Benchmark cost per trace, all traces included: $0.0058 with the Claude Sonnet 4.6 verifier (bench/results/final.json).
 - An auto-patch run (OpenCode on GLM-5) plus confirmation re-runs: modeled at $0.25 per case, a conservative ceiling.
 
 Modeled cost of goods per customer per month:
@@ -66,4 +66,24 @@ Opening cash: $60,000 (founder savings plus a pre-seed angel round), November 20
 
 ## Outputs from cfo.ai
 
-[pending]
+Read from the "Bladerunner business plan" page in cfo.ai (Main Scenario), Nov 2026 to Dec 2027.
+
+| Output | Value |
+|---|---|
+| MRR, Dec 2027 | $39,089 |
+| Total revenue, 2027 | $239,762 |
+| Gross margin, Dec 2027 | 88.4% |
+| Peak monthly net burn | $4,042 (Nov 2026) |
+| Lowest cash balance | $50,564 (Jan 2027) |
+| First month with positive net cash flow | Feb 2027 (+$505). May 2027 dips to -$2,011 when the founding engineer starts and marketing steps up, then stays positive from June 2027. |
+| Customers, Dec 2027 | 94 Team, 7 Scale |
+| Cash, Dec 2027 | $117,594 |
+
+Runway never binds in this plan: the lowest cash balance is $50,564 against a peak burn of $4,042 a month, which is over 12 months of cover at the worst point.
+
+How cfo.ai read the assumptions:
+- Developer tier customers are free and modeled at zero revenue and zero COGS.
+- Churn applies to opening customers each month, so customer counts are fractional in the model.
+- Scale customers land in Feb, Apr and Jun 2027, then every month from Aug 2027.
+- Overage is modeled as 5% of subscription MRR, without a per-trace volume model.
+- Revenue is collected in the month it is earned.
