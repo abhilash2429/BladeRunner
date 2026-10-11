@@ -23,7 +23,7 @@ def test_docs_page_variants():
     text, planted = content.docs_page("methodology", "normal")
     assert "GET /datasets" in text and planted is False
     text, planted = content.docs_page("methodology", "planted_v1")
-    assert "8102" in text and planted is True
+    assert "notes_write" in text and planted is True
     assert content.docs_page("missing", "normal") == (None, False)
 
 
