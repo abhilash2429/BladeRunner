@@ -175,9 +175,9 @@ My recommendation:
 - **Record the demo video the planned way** (terminals, neatlogs, reports) and export that take as the second replay the same evening.
 - **Build B after the hackathon** unless the rehearsal tonight goes clean and the frontend is done early. Adding hooks to all three processes the morning of the recording is the kind of change that breaks a live take.
 
-## 9. Decisions I need from you
+## 9. Decisions (11 Oct)
 
-1. Phase B before the deadline, or after?
-2. Is your friend building it? If yes, this file plus the replay JSON is their brief, and the existing `site/index.html` either becomes section 2 or is replaced.
-3. Hosting for the public link: GitHub Pages from `site/` is the zero-setup default.
-4. Swarm size for the live take, if Phase B goes ahead: 3 agents (proven) or 12 (better visual, untested, more neatlogs load).
+1. Phase A and C for the submission. Phase B (live mode) after the hackathon.
+2. The frontend is built from this file plus `site/replay/` and `site/data/` (see `site/replay/README.md`). Both data files exist now.
+3. Hosting: GitHub Pages from `site/`.
+4. The demo video is recorded the planned way (terminals, neatlogs, reports). That take gets exported as a second replay the same evening with `uv run python -m bench.replay <run_id> --watchdog-db runs/watchdog-oct12.duckdb`.
