@@ -2,7 +2,9 @@
 
 Everything the frontend needs, as static JSON. Architecture and the event schema are in `docs/frontend/proposal.md`.
 
-## `replay/efd78263e6d2.json`: the Oct 11 live run, flag to fixed
+## `replay/efd78263e6d2.full.json`: the Oct 11 live run, flag to fixed
+
+This is the `bench.replay` export. The landing page plays a shorter cut, `replay/efd78263e6d2.json`, built by `frontend/scripts/build_public_data.py` (58 events, player fields `label`, `agents`, `note`). Regenerating the export overwrites `efd78263e6d2.json`; move that output back to `efd78263e6d2.full.json` and rebuild the cut before shipping.
 
 - `runs`: every run in the replay and its role: `live` (the three agents), `confirm` (re-runs after a patch), `control` (a clean scenario run alongside).
 - `cases`: one summary per case: agent, final status, detected by, neatlogs trace link, findings with the verifier's verdict, patch commit and Entire checkpoint, confirmation result.
@@ -35,6 +37,7 @@ Timing to know for the player: agents run 12:38:23 to 12:39:29 IST, cases open a
 
 ```bash
 uv run python -m bench.replay efd78263e6d2
+mv site/replay/efd78263e6d2.json site/replay/efd78263e6d2.full.json
 ```
 
 ```bash

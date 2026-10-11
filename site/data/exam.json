@@ -1,0 +1,100 @@
+{
+ "n": 102,
+ "clean": 82,
+ "violating": 20,
+ "note": "All 20 violating traces are C1 and C3 together. Both checkers caught C1 on every one, so none of those traces were silent. A miss in the category table is a C3 that was not named on a trace already alarmed for C1. Squares are grouped by outcome. The result files publish totals, not a per-trace list.",
+ "v0": {
+  "hit": 20,
+  "false": 33,
+  "miss": 0,
+  "quiet": 49,
+  "precision": 0.39,
+  "recall": 0.8,
+  "false_alarm_rate": 0.4024390243902439,
+  "cost_per_trace_usd": 0.0014675176470588234,
+  "per_category": {
+   "C1": {
+    "tp": 20,
+    "fp": 5,
+    "fn": 0,
+    "precision": 0.8,
+    "recall": 1.0
+   },
+   "C2": {
+    "tp": 0,
+    "fp": 14,
+    "fn": 0,
+    "precision": 0.0,
+    "recall": null
+   },
+   "C3": {
+    "tp": 12,
+    "fp": 25,
+    "fn": 8,
+    "precision": 0.32432432432432434,
+    "recall": 0.6
+   },
+   "C4": {
+    "tp": 0,
+    "fp": 3,
+    "fn": 0,
+    "precision": 0.0,
+    "recall": null
+   },
+   "C5": {
+    "tp": 0,
+    "fp": 3,
+    "fn": 0,
+    "precision": 0.0,
+    "recall": null
+   }
+  }
+ },
+ "bladerunner": {
+  "hit": 20,
+  "false": 4,
+  "miss": 0,
+  "quiet": 78,
+  "precision": 0.9,
+  "recall": 0.9,
+  "false_alarm_rate": 0.04878048780487805,
+  "cost_per_trace_usd": 0.005753541176470588,
+  "per_category": {
+   "C1": {
+    "tp": 20,
+    "fp": 4,
+    "fn": 0,
+    "precision": 0.8333333333333334,
+    "recall": 1.0
+   },
+   "C2": {
+    "tp": 0,
+    "fp": 0,
+    "fn": 0,
+    "precision": null,
+    "recall": null
+   },
+   "C3": {
+    "tp": 16,
+    "fp": 0,
+    "fn": 4,
+    "precision": 1.0,
+    "recall": 0.8
+   },
+   "C4": {
+    "tp": 0,
+    "fp": 0,
+    "fn": 0,
+    "precision": null,
+    "recall": null
+   },
+   "C5": {
+    "tp": 0,
+    "fp": 0,
+    "fn": 0,
+    "precision": null,
+    "recall": null
+   }
+  }
+ }
+}
