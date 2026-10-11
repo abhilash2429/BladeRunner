@@ -14,6 +14,7 @@ neatlogs (traces, detections, write-back), Entire (checkpoints, graph, brain), c
 - 2026-10-10: repo bootstrapped, Entire enabled for Claude Code and OpenCode.
 - 2026-10-10: arena live: mock services, ground truth, one traced agent in neatlogs.
 - 2026-10-11: watchdog pipeline complete: poller, compiler, investigator, verifier, quarantine, write-back, patch, confirm.
+- 2026-10-11: Task 23 base sha a6f11b7286bf79ec1ea258e01dd704f536ed5987 (guardrails and policy reset target).
 
 ## Demo
 Pending.
