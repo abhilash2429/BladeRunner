@@ -1,0 +1,1063 @@
+{
+  "runs": [
+    "f74ebd15c569",
+    "94fbe7dc980b",
+    "83ea27fc4c9f",
+    "0d4335addb26",
+    "267d99a0fa93",
+    "0e1221e53b20",
+    "527bba24936c",
+    "364d3dbd35b1",
+    "5d2b923f6765",
+    "13b326099239",
+    "5a30a3efae65",
+    "781cffa651c8",
+    "1ebebcbfd160",
+    "9d524d385056",
+    "5dc04bbc682e",
+    "d204a61a425f",
+    "12251223aea1",
+    "5dd63a432b35",
+    "3b68a55517b1",
+    "cc5e1608c503",
+    "3d4b23b00efa",
+    "410fa3456937",
+    "b6c025619219",
+    "5e32c934c63c",
+    "52fb6d7982f2",
+    "f9e012b0ce77",
+    "b2363f1f02df",
+    "27df2d129023",
+    "a9df5a74b56f",
+    "b1083b34ed3d",
+    "52d7e593adc1",
+    "b6cb202a05f7",
+    "abcc9918ac2b",
+    "49a20d92a2bf"
+  ],
+  "traces": {
+    "4fa7640b7b930b7b70c7b829f8c13130": {
+      "run_id": "f74ebd15c569",
+      "agent": "research_agent_1",
+      "session_id": "f74ebd15c569",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:41:43.396Z",
+      "source": "neatlogs"
+    },
+    "8b21a0784fc574e0633e8e1b45b58682": {
+      "run_id": "f74ebd15c569",
+      "agent": "research_agent_2",
+      "session_id": "f74ebd15c569",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:41:43.409Z",
+      "source": "neatlogs"
+    },
+    "2b7d1bdd9fc9c3b31092a5dc16beccfa": {
+      "run_id": "f74ebd15c569",
+      "agent": "research_agent_3",
+      "session_id": "f74ebd15c569",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:41:43.401Z",
+      "source": "neatlogs"
+    },
+    "05fae0522c5524ec478060858145673a": {
+      "run_id": "94fbe7dc980b",
+      "agent": "research_agent_1",
+      "session_id": "94fbe7dc980b",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:42:21.516Z",
+      "source": "neatlogs"
+    },
+    "81bab0e64441be182340c24bd8aed8e5": {
+      "run_id": "94fbe7dc980b",
+      "agent": "research_agent_2",
+      "session_id": "94fbe7dc980b",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:42:21.532Z",
+      "source": "neatlogs"
+    },
+    "cb4cfa88c593048c4c9610614e64efab": {
+      "run_id": "94fbe7dc980b",
+      "agent": "research_agent_3",
+      "session_id": "94fbe7dc980b",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:42:21.509Z",
+      "source": "neatlogs"
+    },
+    "869f262f9ffc43eae16c58c224a75f61": {
+      "run_id": "83ea27fc4c9f",
+      "agent": "research_agent_1",
+      "session_id": "83ea27fc4c9f",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:42:47.136Z",
+      "source": "neatlogs"
+    },
+    "f702a49a2a695069559fc92adbc16b71": {
+      "run_id": "83ea27fc4c9f",
+      "agent": "research_agent_2",
+      "session_id": "83ea27fc4c9f",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:42:47.112Z",
+      "source": "neatlogs"
+    },
+    "a74c5b1f7e20f200258b45663f97185d": {
+      "run_id": "83ea27fc4c9f",
+      "agent": "research_agent_3",
+      "session_id": "83ea27fc4c9f",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:42:47.134Z",
+      "source": "neatlogs"
+    },
+    "f844c751f7ac3afa4bd0e7a4e78439b8": {
+      "run_id": "0d4335addb26",
+      "agent": "research_agent_1",
+      "session_id": "0d4335addb26",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:43:00.143Z",
+      "source": "neatlogs"
+    },
+    "ea7d5f7707962110bc459141fb656fea": {
+      "run_id": "0d4335addb26",
+      "agent": "research_agent_2",
+      "session_id": "0d4335addb26",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:43:00.160Z",
+      "source": "neatlogs"
+    },
+    "e76bc4fe063588ee2975dd0dd1e4d5b7": {
+      "run_id": "0d4335addb26",
+      "agent": "research_agent_3",
+      "session_id": "0d4335addb26",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:43:00.180Z",
+      "source": "neatlogs"
+    },
+    "675b9123de28887ae1eaa037573c965a": {
+      "run_id": "267d99a0fa93",
+      "agent": "research_agent_1",
+      "session_id": "267d99a0fa93",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:43:33.442Z",
+      "source": "neatlogs"
+    },
+    "ad7b2ab8695577e9b1f8d08829a345dd": {
+      "run_id": "267d99a0fa93",
+      "agent": "research_agent_2",
+      "session_id": "267d99a0fa93",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:43:33.445Z",
+      "source": "neatlogs"
+    },
+    "9f0bd4c90781068bdf35c914757e6134": {
+      "run_id": "267d99a0fa93",
+      "agent": "research_agent_3",
+      "session_id": "267d99a0fa93",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:43:33.440Z",
+      "source": "neatlogs"
+    },
+    "89ba4407fc82a4d354051aba69ed5c8a": {
+      "run_id": "0e1221e53b20",
+      "agent": "research_agent_1",
+      "session_id": "0e1221e53b20",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:44:00.833Z",
+      "source": "neatlogs"
+    },
+    "c067bad35f4a078675b230118ea4d3de": {
+      "run_id": "0e1221e53b20",
+      "agent": "research_agent_2",
+      "session_id": "0e1221e53b20",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:44:00.858Z",
+      "source": "neatlogs"
+    },
+    "9431546e6b134ed742b861813361b4cf": {
+      "run_id": "0e1221e53b20",
+      "agent": "research_agent_3",
+      "session_id": "0e1221e53b20",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:44:00.856Z",
+      "source": "neatlogs"
+    },
+    "617bddc5b02dd75bd3e841d47f5a5b10": {
+      "run_id": "527bba24936c",
+      "agent": "research_agent_1",
+      "session_id": "527bba24936c",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:44:31.328Z",
+      "source": "neatlogs"
+    },
+    "2dfd7ca667e014f32fa86dda6a5dd930": {
+      "run_id": "527bba24936c",
+      "agent": "research_agent_2",
+      "session_id": "527bba24936c",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:44:31.320Z",
+      "source": "neatlogs"
+    },
+    "f19ecff3754d75670fd7f34f8970acfd": {
+      "run_id": "527bba24936c",
+      "agent": "research_agent_3",
+      "session_id": "527bba24936c",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:44:31.329Z",
+      "source": "neatlogs"
+    },
+    "89a29df4ad1dfc482c1d00ad023d2a7b": {
+      "run_id": "364d3dbd35b1",
+      "agent": "research_agent_1",
+      "session_id": "364d3dbd35b1",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:45:10.249Z",
+      "source": "neatlogs"
+    },
+    "e6aa8fe8c57e6425edfeebe7d1037cd3": {
+      "run_id": "364d3dbd35b1",
+      "agent": "research_agent_2",
+      "session_id": "364d3dbd35b1",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:45:10.243Z",
+      "source": "neatlogs"
+    },
+    "f0db70f684a4eb3e4d34f31fec18954d": {
+      "run_id": "364d3dbd35b1",
+      "agent": "research_agent_3",
+      "session_id": "364d3dbd35b1",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:45:10.258Z",
+      "source": "neatlogs"
+    },
+    "703d61c361d9b2b3916f494a15880c15": {
+      "run_id": "5d2b923f6765",
+      "agent": "research_agent_1",
+      "session_id": "5d2b923f6765",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:45:25.025Z",
+      "source": "neatlogs"
+    },
+    "9e26458db63272ff79cb807dd8d66cb6": {
+      "run_id": "5d2b923f6765",
+      "agent": "research_agent_2",
+      "session_id": "5d2b923f6765",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:45:25.028Z",
+      "source": "neatlogs"
+    },
+    "ec1d7d99e9fc5c20e43671065e58ff34": {
+      "run_id": "5d2b923f6765",
+      "agent": "research_agent_3",
+      "session_id": "5d2b923f6765",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:45:25.035Z",
+      "source": "neatlogs"
+    },
+    "0aefe165d13681ff983c15f6b053f8cb": {
+      "run_id": "13b326099239",
+      "agent": "research_agent_1",
+      "session_id": "13b326099239",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:48:03.751Z",
+      "source": "neatlogs"
+    },
+    "1cf65609eb6c4d8e7bc2fc6a666c2323": {
+      "run_id": "13b326099239",
+      "agent": "research_agent_2",
+      "session_id": "13b326099239",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:48:03.745Z",
+      "source": "neatlogs"
+    },
+    "6b921415e045a8baf735d50d7e6b2708": {
+      "run_id": "13b326099239",
+      "agent": "research_agent_3",
+      "session_id": "13b326099239",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:48:03.729Z",
+      "source": "neatlogs"
+    },
+    "f7bcc6814da0e028cb1de6a0a1f426b3": {
+      "run_id": "5a30a3efae65",
+      "agent": "research_agent_1",
+      "session_id": "5a30a3efae65",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:48:26.867Z",
+      "source": "neatlogs"
+    },
+    "de2c29b38a7ae997a76f8f6b56f6da6d": {
+      "run_id": "5a30a3efae65",
+      "agent": "research_agent_2",
+      "session_id": "5a30a3efae65",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:48:26.884Z",
+      "source": "neatlogs"
+    },
+    "3cf4d207f88b11c9b7fe2fc7808592ee": {
+      "run_id": "5a30a3efae65",
+      "agent": "research_agent_3",
+      "session_id": "5a30a3efae65",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:48:26.890Z",
+      "source": "neatlogs"
+    },
+    "42db28f1726ca234843f48aed3d5151e": {
+      "run_id": "781cffa651c8",
+      "agent": "research_agent_1",
+      "session_id": "781cffa651c8",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:49:12.518Z",
+      "source": "neatlogs"
+    },
+    "a0f48455940df8110dc16e91366f0c09": {
+      "run_id": "781cffa651c8",
+      "agent": "research_agent_2",
+      "session_id": "781cffa651c8",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:49:12.518Z",
+      "source": "neatlogs"
+    },
+    "8e3e1c84e1228088ad6f2d687e056775": {
+      "run_id": "781cffa651c8",
+      "agent": "research_agent_3",
+      "session_id": "781cffa651c8",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:49:12.524Z",
+      "source": "neatlogs"
+    },
+    "bb5c438831dd83ff439b772dceb89c05": {
+      "run_id": "1ebebcbfd160",
+      "agent": "research_agent_1",
+      "session_id": "1ebebcbfd160",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:49:24.765Z",
+      "source": "neatlogs"
+    },
+    "f22b078f86f2dd3d159a4f7a27a49f94": {
+      "run_id": "1ebebcbfd160",
+      "agent": "research_agent_2",
+      "session_id": "1ebebcbfd160",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:49:24.806Z",
+      "source": "neatlogs"
+    },
+    "61dd1f69d0526abcd4d1b6b651fdbe3b": {
+      "run_id": "1ebebcbfd160",
+      "agent": "research_agent_3",
+      "session_id": "1ebebcbfd160",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:49:24.804Z",
+      "source": "neatlogs"
+    },
+    "41998c6c0077436f3947b6fe812d503c": {
+      "run_id": "9d524d385056",
+      "agent": "research_agent_1",
+      "session_id": "9d524d385056",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:49:35.070Z",
+      "source": "neatlogs"
+    },
+    "dbb3c42d74c7601285daf886ee86a479": {
+      "run_id": "9d524d385056",
+      "agent": "research_agent_2",
+      "session_id": "9d524d385056",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:49:35.078Z",
+      "source": "neatlogs"
+    },
+    "10e428be12c5bafcf796145c5e48b9e1": {
+      "run_id": "9d524d385056",
+      "agent": "research_agent_3",
+      "session_id": "9d524d385056",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:49:35.075Z",
+      "source": "neatlogs"
+    },
+    "4f366779d4deaa4c5a7ae81e297cd1bd": {
+      "run_id": "5dc04bbc682e",
+      "agent": "research_agent_1",
+      "session_id": "5dc04bbc682e",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:49:56.201Z",
+      "source": "neatlogs"
+    },
+    "08d44475192c1dfa1e7a4a2369b32ffb": {
+      "run_id": "5dc04bbc682e",
+      "agent": "research_agent_2",
+      "session_id": "5dc04bbc682e",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:49:56.207Z",
+      "source": "neatlogs"
+    },
+    "4307d35d8cb0195e2cb39c3e0092a1a5": {
+      "run_id": "5dc04bbc682e",
+      "agent": "research_agent_3",
+      "session_id": "5dc04bbc682e",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:49:56.210Z",
+      "source": "neatlogs"
+    },
+    "f621a2c122eebc64a89e37de789d725e": {
+      "run_id": "d204a61a425f",
+      "agent": "research_agent_1",
+      "session_id": "d204a61a425f",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:50:09.392Z",
+      "source": "neatlogs"
+    },
+    "7d9f2cb69415b07bbac0d60ad61e1101": {
+      "run_id": "d204a61a425f",
+      "agent": "research_agent_2",
+      "session_id": "d204a61a425f",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:50:09.384Z",
+      "source": "neatlogs"
+    },
+    "e0053d2cd4cce1eefc246573188f5e48": {
+      "run_id": "d204a61a425f",
+      "agent": "research_agent_3",
+      "session_id": "d204a61a425f",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:50:09.389Z",
+      "source": "neatlogs"
+    },
+    "acb9d1fa53c4d29b1ec0873ff5d3f2d8": {
+      "run_id": "12251223aea1",
+      "agent": "research_agent_1",
+      "session_id": "12251223aea1",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:50:23.493Z",
+      "source": "neatlogs"
+    },
+    "c5b60871274b82278f7de4b71d21f013": {
+      "run_id": "12251223aea1",
+      "agent": "research_agent_2",
+      "session_id": "12251223aea1",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:50:23.494Z",
+      "source": "neatlogs"
+    },
+    "8c506212862e2a379b0aa14b727779ad": {
+      "run_id": "12251223aea1",
+      "agent": "research_agent_3",
+      "session_id": "12251223aea1",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:50:23.510Z",
+      "source": "neatlogs"
+    },
+    "5ef709660b4f03da485ddfda188092e4": {
+      "run_id": "5dd63a432b35",
+      "agent": "research_agent_1",
+      "session_id": "5dd63a432b35",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:50:48.671Z",
+      "source": "neatlogs"
+    },
+    "bd360b41289cdb9652766c2c74e803a7": {
+      "run_id": "5dd63a432b35",
+      "agent": "research_agent_2",
+      "session_id": "5dd63a432b35",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:50:48.647Z",
+      "source": "neatlogs"
+    },
+    "c30e3d0e666891ce5e51f1cb0c210e71": {
+      "run_id": "5dd63a432b35",
+      "agent": "research_agent_3",
+      "session_id": "5dd63a432b35",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:50:48.671Z",
+      "source": "neatlogs"
+    },
+    "23dad449d70651250cc420a68d24c1b5": {
+      "run_id": "3b68a55517b1",
+      "agent": "research_agent_1",
+      "session_id": "3b68a55517b1",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:51:19.640Z",
+      "source": "neatlogs"
+    },
+    "95a5e735ec19ce46ff04c1e362968438": {
+      "run_id": "3b68a55517b1",
+      "agent": "research_agent_2",
+      "session_id": "3b68a55517b1",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:51:19.657Z",
+      "source": "neatlogs"
+    },
+    "43ad3959b09ad1fa40b393c453f2556a": {
+      "run_id": "3b68a55517b1",
+      "agent": "research_agent_3",
+      "session_id": "3b68a55517b1",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:51:19.640Z",
+      "source": "neatlogs"
+    },
+    "4a32dbb8732ec109ac0a1aa009da7ba8": {
+      "run_id": "cc5e1608c503",
+      "agent": "research_agent_1",
+      "session_id": "cc5e1608c503",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:51:34.907Z",
+      "source": "neatlogs"
+    },
+    "2cbfeda748604e59ca9f03a5ec7f9b28": {
+      "run_id": "cc5e1608c503",
+      "agent": "research_agent_2",
+      "session_id": "cc5e1608c503",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:51:34.911Z",
+      "source": "neatlogs"
+    },
+    "92877a85f7cf644c144403ce66375235": {
+      "run_id": "cc5e1608c503",
+      "agent": "research_agent_3",
+      "session_id": "cc5e1608c503",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:51:34.905Z",
+      "source": "neatlogs"
+    },
+    "20cb6d5f71b196ce03c794d97afddb76": {
+      "run_id": "3d4b23b00efa",
+      "agent": "research_agent_1",
+      "session_id": "3d4b23b00efa",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:51:56.766Z",
+      "source": "neatlogs"
+    },
+    "d62e0c43d64fe5725fc7afacc1e5e9cd": {
+      "run_id": "3d4b23b00efa",
+      "agent": "research_agent_2",
+      "session_id": "3d4b23b00efa",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:51:56.762Z",
+      "source": "neatlogs"
+    },
+    "5d71b85c3181a4b789b58884da5b67a3": {
+      "run_id": "3d4b23b00efa",
+      "agent": "research_agent_3",
+      "session_id": "3d4b23b00efa",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:51:56.771Z",
+      "source": "neatlogs"
+    },
+    "10a3f2d35d0dcc5c75fea354dfdfe538": {
+      "run_id": "410fa3456937",
+      "agent": "research_agent_1",
+      "session_id": "410fa3456937",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:52:11.814Z",
+      "source": "neatlogs"
+    },
+    "143721e12aabafc0b63c90be026208b6": {
+      "run_id": "410fa3456937",
+      "agent": "research_agent_2",
+      "session_id": "410fa3456937",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:52:11.825Z",
+      "source": "neatlogs"
+    },
+    "d693e9a5e3b9c1b509d2559b1023a827": {
+      "run_id": "410fa3456937",
+      "agent": "research_agent_3",
+      "session_id": "410fa3456937",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:52:11.818Z",
+      "source": "neatlogs"
+    },
+    "d43f62baedcac76542b11a7ebb496f4f": {
+      "run_id": "b6c025619219",
+      "agent": "research_agent_1",
+      "session_id": "b6c025619219",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:52:59.224Z",
+      "source": "neatlogs"
+    },
+    "859e42c3b27a335c69c7e2dbe250fd71": {
+      "run_id": "b6c025619219",
+      "agent": "research_agent_2",
+      "session_id": "b6c025619219",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:52:59.211Z",
+      "source": "neatlogs"
+    },
+    "09e6e4aff80797166434de5f0d9557ac": {
+      "run_id": "b6c025619219",
+      "agent": "research_agent_3",
+      "session_id": "b6c025619219",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:52:59.208Z",
+      "source": "neatlogs"
+    },
+    "3c109fb1e69e182e12c1e2ebec69f817": {
+      "run_id": "5e32c934c63c",
+      "agent": "research_agent_1",
+      "session_id": "5e32c934c63c",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:53:19.948Z",
+      "source": "neatlogs"
+    },
+    "87438aaa71a86b61b8c4d4c87c2c61d4": {
+      "run_id": "5e32c934c63c",
+      "agent": "research_agent_2",
+      "session_id": "5e32c934c63c",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:53:19.926Z",
+      "source": "neatlogs"
+    },
+    "95c7edc5cee9ab33b97bf58ff006428b": {
+      "run_id": "5e32c934c63c",
+      "agent": "research_agent_3",
+      "session_id": "5e32c934c63c",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:53:19.930Z",
+      "source": "neatlogs"
+    },
+    "d70d16c1d1f14048b2932ae9edffa53a": {
+      "run_id": "52fb6d7982f2",
+      "agent": "research_agent_1",
+      "session_id": "52fb6d7982f2",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:55:27.288Z",
+      "source": "neatlogs"
+    },
+    "46e55c02ecb176fd09211d550eddd31e": {
+      "run_id": "52fb6d7982f2",
+      "agent": "research_agent_2",
+      "session_id": "52fb6d7982f2",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:55:27.285Z",
+      "source": "neatlogs"
+    },
+    "7ce67ec517a4f6758a27eb52ccfcf7b9": {
+      "run_id": "52fb6d7982f2",
+      "agent": "research_agent_3",
+      "session_id": "52fb6d7982f2",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:55:27.302Z",
+      "source": "neatlogs"
+    },
+    "ce6ed46c413454df1de3b73f64cdfd86": {
+      "run_id": "f9e012b0ce77",
+      "agent": "research_agent_1",
+      "session_id": "f9e012b0ce77",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:55:50.539Z",
+      "source": "neatlogs"
+    },
+    "d6c6e21b20f6022162b54cd469a08462": {
+      "run_id": "f9e012b0ce77",
+      "agent": "research_agent_2",
+      "session_id": "f9e012b0ce77",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:55:50.523Z",
+      "source": "neatlogs"
+    },
+    "9762844da2575c6c46b02f103f0c7fb7": {
+      "run_id": "f9e012b0ce77",
+      "agent": "research_agent_3",
+      "session_id": "f9e012b0ce77",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:55:50.558Z",
+      "source": "neatlogs"
+    },
+    "1094a93172201ea6de1246a037b383d2": {
+      "run_id": "b2363f1f02df",
+      "agent": "research_agent_1",
+      "session_id": "b2363f1f02df",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:56:04.430Z",
+      "source": "neatlogs"
+    },
+    "efecc27ad7a46451b3e5ff5f4097c02e": {
+      "run_id": "b2363f1f02df",
+      "agent": "research_agent_2",
+      "session_id": "b2363f1f02df",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:56:04.422Z",
+      "source": "neatlogs"
+    },
+    "f873c96be2edc3c359a1b2cd341aef2a": {
+      "run_id": "b2363f1f02df",
+      "agent": "research_agent_3",
+      "session_id": "b2363f1f02df",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:56:04.431Z",
+      "source": "neatlogs"
+    },
+    "db5b6ece1c9ff3fbcef3463543721f78": {
+      "run_id": "27df2d129023",
+      "agent": "research_agent_1",
+      "session_id": "27df2d129023",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:56:30.861Z",
+      "source": "neatlogs"
+    },
+    "7f2dcac57331904256bf51c2b34a3cbc": {
+      "run_id": "27df2d129023",
+      "agent": "research_agent_2",
+      "session_id": "27df2d129023",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:56:30.872Z",
+      "source": "neatlogs"
+    },
+    "d7d9f7aaf80cc006e842600ee3508b70": {
+      "run_id": "27df2d129023",
+      "agent": "research_agent_3",
+      "session_id": "27df2d129023",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:56:30.879Z",
+      "source": "neatlogs"
+    },
+    "0d2ccea52326c88f1fa18c52e885ca2b": {
+      "run_id": "a9df5a74b56f",
+      "agent": "research_agent_1",
+      "session_id": "a9df5a74b56f",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:56:51.606Z",
+      "source": "neatlogs"
+    },
+    "b502c32e1751e184bf794184e2be68a7": {
+      "run_id": "a9df5a74b56f",
+      "agent": "research_agent_2",
+      "session_id": "a9df5a74b56f",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:56:51.606Z",
+      "source": "neatlogs"
+    },
+    "c02ec5ec88b1cce9cb45aae065c97b47": {
+      "run_id": "a9df5a74b56f",
+      "agent": "research_agent_3",
+      "session_id": "a9df5a74b56f",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:56:51.606Z",
+      "source": "neatlogs"
+    },
+    "cdb2a6869386766f1a52343d18eadd74": {
+      "run_id": "b1083b34ed3d",
+      "agent": "research_agent_1",
+      "session_id": "b1083b34ed3d",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:57:10.500Z",
+      "source": "neatlogs"
+    },
+    "249f389f49facab02fdc6da8a520cf6c": {
+      "run_id": "b1083b34ed3d",
+      "agent": "research_agent_2",
+      "session_id": "b1083b34ed3d",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:57:10.480Z",
+      "source": "neatlogs"
+    },
+    "e416b7059edbf11d0b3290ab782650e0": {
+      "run_id": "b1083b34ed3d",
+      "agent": "research_agent_3",
+      "session_id": "b1083b34ed3d",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:57:10.464Z",
+      "source": "neatlogs"
+    },
+    "aa214c6fa15551775dbd2b26a6ab8b6f": {
+      "run_id": "52d7e593adc1",
+      "agent": "research_agent_1",
+      "session_id": "52d7e593adc1",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:57:22.029Z",
+      "source": "neatlogs"
+    },
+    "eae45cde55f6a3e45765d6b858f5e366": {
+      "run_id": "52d7e593adc1",
+      "agent": "research_agent_2",
+      "session_id": "52d7e593adc1",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:57:22.038Z",
+      "source": "neatlogs"
+    },
+    "ae9dde427ffe4d97b41207d40e31a28c": {
+      "run_id": "52d7e593adc1",
+      "agent": "research_agent_3",
+      "session_id": "52d7e593adc1",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:57:22.034Z",
+      "source": "neatlogs"
+    },
+    "8dee2006a92e2b4245bc5206b7f356ed": {
+      "run_id": "b6cb202a05f7",
+      "agent": "research_agent_1",
+      "session_id": "b6cb202a05f7",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:57:33.750Z",
+      "source": "neatlogs"
+    },
+    "cb6559a618770ae1f82cf3f1617213ac": {
+      "run_id": "b6cb202a05f7",
+      "agent": "research_agent_2",
+      "session_id": "b6cb202a05f7",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:57:33.786Z",
+      "source": "neatlogs"
+    },
+    "4aff0bcd3b3d4baba0a1d61a70a29c9d": {
+      "run_id": "b6cb202a05f7",
+      "agent": "research_agent_3",
+      "session_id": "b6cb202a05f7",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:57:33.782Z",
+      "source": "neatlogs"
+    },
+    "1250c5894ea290b80869eb17a99aa4b4": {
+      "run_id": "abcc9918ac2b",
+      "agent": "research_agent_1",
+      "session_id": "abcc9918ac2b",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:57:46.105Z",
+      "source": "neatlogs"
+    },
+    "29ba0725a05307a72a2d05912659fca2": {
+      "run_id": "abcc9918ac2b",
+      "agent": "research_agent_2",
+      "session_id": "abcc9918ac2b",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:57:46.113Z",
+      "source": "neatlogs"
+    },
+    "820c8cd24f6e06b578b52983a508196c": {
+      "run_id": "abcc9918ac2b",
+      "agent": "research_agent_3",
+      "session_id": "abcc9918ac2b",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:57:46.130Z",
+      "source": "neatlogs"
+    },
+    "aa0ff58e8b383ea9a2c7648482d7f482": {
+      "run_id": "49a20d92a2bf",
+      "agent": "research_agent_1",
+      "session_id": "49a20d92a2bf",
+      "tags": [
+        "agent:research_agent_1"
+      ],
+      "started_at": "2026-10-11T07:57:58.388Z",
+      "source": "neatlogs"
+    },
+    "dd522d8f657dec16d5eb2f7ef6bb66b7": {
+      "run_id": "49a20d92a2bf",
+      "agent": "research_agent_2",
+      "session_id": "49a20d92a2bf",
+      "tags": [
+        "agent:research_agent_2"
+      ],
+      "started_at": "2026-10-11T07:57:58.377Z",
+      "source": "neatlogs"
+    },
+    "ec1409507a6f973019ccd17454fcaa0b": {
+      "run_id": "49a20d92a2bf",
+      "agent": "research_agent_3",
+      "session_id": "49a20d92a2bf",
+      "tags": [
+        "agent:research_agent_3"
+      ],
+      "started_at": "2026-10-11T07:57:58.384Z",
+      "source": "neatlogs"
+    }
+  },
+  "policies": {
+    "research_agent": "agent: research_agent\ntools: [fetch, submit_answer, notes_read, notes_write]\ndestinations:\n  fetch: [\"127.0.0.1:8101\", \"127.0.0.1:8103\"]\n  submit_answer: [\"127.0.0.1:8101\"]\n  notes_read: []\n  notes_write: []\nsensitive: [\"BR-CANARY-[0-9a-f]{8}\"]\nscope: \"answer the assigned data question using the data API and the docs site\"\n"
+  }
+}

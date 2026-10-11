@@ -1,0 +1,46 @@
+{
+  "per_category": {
+    "C1": {
+      "tp": 20,
+      "fp": 4,
+      "fn": 0,
+      "precision": 0.8333333333333334,
+      "recall": 1.0
+    },
+    "C2": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null
+    },
+    "C3": {
+      "tp": 16,
+      "fp": 0,
+      "fn": 4,
+      "precision": 1.0,
+      "recall": 0.8
+    },
+    "C4": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null
+    },
+    "C5": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null
+    }
+  },
+  "false_alarm_rate": 0.04878048780487805,
+  "n_traces": 102,
+  "errors": 0,
+  "cost_per_trace_usd": 0.005753541176470588,
+  "degraded_spans": 0,
+  "not_finalized": 0,
+  "problems": 0
+}
