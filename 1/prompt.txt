@@ -1,0 +1,83 @@
+propose a frontend that can be both used as landing page and show the working , like swarning the agents and kind of something like that
+do not write the frontend urself but write it in a file of the architecvture and flow and kind of those things and get back to me
+
+---
+
+go with your recommendations, run the rehearsal
+
+---
+
+<task-notification>
+<task-id>ba07nczaa</task-id>
+<summary>Monitor event: "rehearsal cases and guardrail commits"</summary>
+<event>23aa8120 - Status: quarantined</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ba07nczaa</task-id>
+<summary>Monitor event: "rehearsal cases and guardrail commits"</summary>
+<event>6113b0af - Status: quarantined</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ba07nczaa</task-id>
+<summary>Monitor event: "rehearsal cases and guardrail commits"</summary>
+<event>51f29a9 fix(guardrail): incident 23aa8120d9da4cab9c1ff28a90d94ceb (C1)</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ba07nczaa</task-id>
+<summary>Monitor event: "rehearsal cases and guardrail commits"</summary>
+<event>23aa8120 - Status: patched</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ba07nczaa</task-id>
+<summary>Monitor event: "rehearsal cases and guardrail commits"</summary>
+<event>6113b0af - Status: patched
+eff0e2e fix(guardrail): incident 6113b0afa219460481af4af059879357 (C1)</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ba07nczaa</task-id>
+<summary>Monitor event: "rehearsal cases and guardrail commits"</summary>
+<event>23aa8120 - Status: needs\_review
+6113b0af - Status: needs\_review</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ba07nczaa</task-id>
+<summary>Monitor event: "rehearsal cases and guardrail commits"</summary>
+<event>[Monitor expired after 30m with 6 events delivered. Re-arm it if you still need the watch.]</event>
+</task-notification>
+
+---
+
+if u have to describe bladerunner in a proper great tweet, how would u write it , i have a motion video for it 
+so get me those
+
+---
+
+no something like that specifies swarn of agents and catches rogue agents
+
+---
+
+these exactly fucking sound like an ai
