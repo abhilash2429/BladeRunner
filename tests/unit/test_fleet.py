@@ -14,7 +14,7 @@ def test_build_agent_cmd():
         sys.executable, "-m", "arena.agent", "--run-id", "r1", "--agent", "research_agent_2"]
 
 
-def test_run_agents_spawns_one_process_per_agent():
+def test_run_agents_spawns_one_process_per_agent(tmp_path):
     spawned = []
 
     class FakeProc:
@@ -24,7 +24,7 @@ def test_run_agents_spawns_one_process_per_agent():
         def wait(self, timeout=None):
             return 0
 
-    codes = run_agents("r1", ["a_1", "a_2"], popen=FakeProc)
+    codes = run_agents("r1", ["a_1", "a_2"], popen=FakeProc, span_dir=tmp_path)
     assert codes == [0, 0] and len(spawned) == 2 and spawned[1][-1] == "a_2"
 
 
@@ -37,3 +37,19 @@ def test_main_uses_agents_flag_and_records_one_json_line(tmp_path, monkeypatch):
     lines = record.read_text(encoding="utf-8").splitlines()
     assert [json.loads(x) for x in lines] == [
         {"run_id": "r9", "scenario": "planted", "agents": ["research_agent_1", "research_agent_2"]}]
+
+
+def test_run_agents_gives_each_agent_its_own_span_log(tmp_path):
+    envs = []
+
+    class FakeProc:
+        def __init__(self, cmd, **kwargs):
+            envs.append(kwargs["env"])
+
+        def wait(self, timeout=None):
+            return 0
+
+    run_agents("r1", ["a_1", "a_2"], popen=FakeProc, span_dir=tmp_path)
+    assert [e["NEATLOGS_LOG_SPANS"] for e in envs] == ["1", "1"]
+    assert envs[1]["NEATLOGS_LOG_SPANS_FILE"] == str(tmp_path / "r1" / "a_2.jsonl")
+    assert (tmp_path / "r1").is_dir()

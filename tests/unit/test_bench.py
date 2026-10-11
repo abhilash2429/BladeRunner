@@ -6,7 +6,7 @@ import duckdb
 import pytest
 
 from arena.state import ArenaState
-from bench.freeze import FreezeError, collect_spans, freeze, read_runs
+from bench.freeze import FreezeError, collect_spans, freeze, read_runs, read_span_log
 from bench.live_ttd import ttd_rows
 from bench.score import (check_coverage, cost_per_trace, frozen_policy_text, load_gold, manifest_counts,
                          markdown_table, predict_final, predict_v0, score)
@@ -243,7 +243,7 @@ def test_predict_v0_checks_budget_and_tolerates_bad_categories(tmp_path):
 
 def run_freeze(tmp_path, client, db, run_ids, allow_degraded=False, name="out"):
     return freeze(run_ids if isinstance(run_ids, list) else [run_ids], client, db, tmp_path / name, tmp_path / "inc",
-                  allow_degraded=allow_degraded)
+                  allow_degraded=allow_degraded, span_logs=tmp_path / "spanlogs")
 
 
 def test_freeze_rejects_two_traces_for_one_agent(tmp_path):
@@ -405,3 +405,88 @@ def test_manifest_counts_surface_degradation():
     manifest = {"traces": {"a": {"degraded_spans": ["s1", "s2"]}, "b": {"not_finalized": True}, "c": {}},
                 "problems": ["x"]}
     assert manifest_counts(manifest) == {"degraded_spans": 2, "not_finalized": 1, "problems": 1}
+
+
+def log_record(span_id, kind, name, parent, start_ns, attrs, trace_id="lt1"):
+    return {"trace_id": trace_id, "span_id": span_id, "parent_span_id": parent, "name": name, "kind": kind,
+            "start_time": start_ns, "end_time": start_ns + 1, "attributes": attrs}
+
+
+def agent_log(tmp_path, run_id, agent="research_agent_1", records=None):
+    records = records if records is not None else [
+        log_record("w", "workflow", "arena-run", None, 1_767_225_600_000_000_000,
+                   {"neatlogs.session.id": run_id, "neatlogs.workflow.input": '{"run_id": "x"}',
+                    "neatlogs.workflow.output": '{"steps": 2}'}),
+        log_record("l", "llm", "openai.chat.completions.create", "w", 1_767_225_600_001_000_000,
+                   {"neatlogs.llm.input_messages.0.role": "system", "neatlogs.llm.input_messages.0.content": "rules",
+                    "neatlogs.llm.input_messages.1.role": "user", "neatlogs.llm.input_messages.1.content": "q1",
+                    "neatlogs.llm.output_messages.0.role": "assistant",
+                    "neatlogs.llm.output_messages.0.content": "calling notes_write"}),
+        log_record("t", "tool", "notes_write", "w", 1_767_225_600_002_500_000,
+                   {"neatlogs.tool.input": '{"tool": "notes_write", "target_host": "127.0.0.1:8102", "args": {"a": "é"}}',
+                    "neatlogs.tool.output": '"{\\"id\\": \\"n1\\"}"'}),
+    ]
+    path = tmp_path / "spanlogs" / run_id / f"{agent}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+    return path
+
+
+def test_read_span_log_matches_the_neatlogs_span_shape(tmp_path):
+    local = read_span_log(agent_log(tmp_path, "r1"))
+    assert local.trace_id == "lt1" and local.session_id == "r1" and local.started_at == "2026-01-01T00:00:00.000Z"
+    by_id = {s.span_id: s for s in local.spans}
+    assert [s.span_id for s in local.spans] == ["w", "l", "t"]
+    assert by_id["w"].kind == "WORKFLOW" and by_id["w"].input == '{"run_id":"x"}' and by_id["w"].parent_id is None
+    assert by_id["l"].input == "system: rules\nuser: q1" and by_id["l"].output == "assistant: calling notes_write"
+    assert by_id["t"].input == '{"tool":"notes_write","target_host":"127.0.0.1:8102","args":{"a":"é"}}'
+    assert by_id["t"].output == '"{\\"id\\": \\"n1\\"}"' and by_id["t"].start == "2026-01-01T00:00:00.002Z"
+
+
+@pytest.mark.parametrize("bad", ["two_traces", "no_root", "orphan", "missing"])
+def test_read_span_log_rejects_incomplete_logs(tmp_path, bad):
+    path = agent_log(tmp_path, "r1")
+    lines = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines()]
+    if bad == "two_traces":
+        lines[2]["trace_id"] = "lt2"
+    elif bad == "no_root":
+        lines = lines[1:]
+    elif bad == "orphan":
+        lines[2]["parent_span_id"] = "gone"
+    if bad == "missing":
+        path.unlink()
+    else:
+        path.write_text("".join(json.dumps(r) + "\n" for r in lines), encoding="utf-8")
+    assert read_span_log(path) is None
+
+
+def test_freeze_falls_back_to_the_local_log_when_neatlogs_lost_the_trace(tmp_path):
+    db, run_id = frozen_manifest_db(tmp_path)
+    agent_log(tmp_path, run_id)
+    manifest = run_freeze(tmp_path, fake_client(traces=[]), db, run_id)
+    entry = manifest["traces"]["lt1"]
+    assert entry["source"] == "local_log" and entry["session_id"] == run_id and entry["agent"] == "research_agent_1"
+    assert entry["tags"] == ["agent:research_agent_1"] and "problems" not in manifest
+    assert load_gold(tmp_path / "out").keys() == {"lt1"}
+    assert [s.span_id for s in FrozenSource(tmp_path / "out").spans("lt1")] == ["w", "l", "t"]
+
+
+def test_freeze_falls_back_to_the_local_log_for_a_dead_lettered_trace(tmp_path):
+    db, run_id = frozen_manifest_db(tmp_path)
+    agent_log(tmp_path, run_id)
+    manifest = run_freeze(tmp_path, fake_client(traces=[trace("lt1", finalization="dlq")]), db, run_id)
+    assert manifest["traces"]["lt1"]["source"] == "local_log" and "not_finalized" not in manifest["traces"]["lt1"]
+
+
+def test_freeze_falls_back_to_the_local_log_when_neatlogs_dropped_spans(tmp_path):
+    db, run_id = frozen_manifest_db(tmp_path)
+    agent_log(tmp_path, run_id)
+    manifest = run_freeze(tmp_path, fake_client(traces=[trace("lt1", spansCount=3)]), db, run_id)
+    assert manifest["traces"]["lt1"]["source"] == "local_log"
+
+
+def test_freeze_prefers_a_complete_neatlogs_trace_over_the_local_log(tmp_path):
+    db, run_id = frozen_manifest_db(tmp_path)
+    agent_log(tmp_path, run_id)
+    manifest = run_freeze(tmp_path, fake_client(traces=[trace("tr1", spansCount=2)]), db, run_id)
+    assert list(manifest["traces"]) == ["tr1"] and manifest["traces"]["tr1"]["source"] == "neatlogs"

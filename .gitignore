@@ -18,3 +18,4 @@ runs/raw/
 bench/results/*.tmp
 node_modules/
 runs/confirm_logs/
+runs/spans/

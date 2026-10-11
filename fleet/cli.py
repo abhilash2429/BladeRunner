@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import httpx
 
-from common.config import REPO_ROOT, host
+from common.config import REPO_ROOT, RUNS_DIR, host
 
 
 def agent_names(n: int) -> list[str]:
@@ -25,8 +27,15 @@ def register_run(control_url: str, scenario: str, seed: int, agents: list[str], 
     return r.json()["run_id"]
 
 
-def run_agents(run_id: str, agents: list[str], popen=subprocess.Popen, timeout: int = 900) -> list[int]:
-    procs = [popen(build_agent_cmd(run_id, a), cwd=REPO_ROOT) for a in agents]
+def agent_env(run_id: str, agent: str, span_dir: Path) -> dict[str, str]:
+    (span_dir / run_id).mkdir(parents=True, exist_ok=True)
+    return dict(os.environ, NEATLOGS_LOG_SPANS="1", NEATLOGS_LOG_SPANS_FILE=str(span_dir / run_id / f"{agent}.jsonl"))
+
+
+def run_agents(run_id: str, agents: list[str], popen=subprocess.Popen, timeout: int = 900,
+               span_dir: Path = RUNS_DIR / "spans") -> list[int]:
+    procs = [popen(build_agent_cmd(run_id, a), cwd=REPO_ROOT, env=agent_env(run_id, a, Path(span_dir)))
+             for a in agents]
     codes = []
     for p in procs:
         try:
