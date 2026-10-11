@@ -30,15 +30,14 @@ There are three processes:
 
 ## 3. State at handoff (2026-10-11)
 
-HEAD is `0f92e50` plus this file's commit. The full suite gives 295 passed (`uv run pytest -q`). **Nothing is in flight.**
+HEAD is `f66aeea`. The full suite gives 497 passed, 2 skipped (`uv run pytest -q`, Windows). **Nothing is in flight.**
 
 **Tasks 0 to 17 are complete.** Each was implemented, reviewed, fixed and closed in the ledger.
 
 | Task | State | Do next |
 |---|---|---|
-| 18 Quarantine client, write-back, incident reports | Fix round 1 landed at `0f92e50` and addressed every review finding (below). **One open item:** when adds exceed the 10-tag cap (for example 7 categories plus 4 bladerunner tags), `tag()` returns False with TooManyTags. **Ruling:** keep the status, incident and bladerunner tags; trim `cat:*` tags in C-order to fit; log the trimmed categories; add a test. | Implement the item. Then run a scoped re-review of `git diff efa216a..HEAD -- watchdog/actions watchdog/neatlogs_client.py tests` against the finding list below. Then write `Task 18: complete` in the ledger. |
-| 19 Incident memory (Entire Brain) | Landed at `a61ce4f`, not yet reviewed. **Ruling:** `remember` shells out to `entire brain remember <fact> --path project.incidents.<cat> --json`, because no brain_remember MCP tool exists. `search` uses MCP `brain_query` with `fail_after(20)` and a grep fallback. The constructor dropped remember_tool, fact_arg and path_arg. **Known bug, fix first:** `filter_hits` keeps only refs that start with `incidents.` or contain `docs/incidents/`, so facts stored at `project.incidents.*` are dropped. Widen it and add a test. | Fix the bug, then run a full task review against `task-19-brief.md` plus the ruling. The live check (does Brain accept that path?) belongs to Task 23. |
-| 20 to 27 | Not started | See 5. |
+| 18, 19, 20, 21, 22, 25 | Complete. Built remotely by a Cursor agent (`5a6e8ee..7168eb6`), verified against every ruling below on 2026-10-11, Windows process-tree fix at `f66aeea`. Ledger has the details and deferred minors. | Nothing. |
+| 23, 24, 26, 27 | Not started | See 5. Task 23 is next. |
 
 Task 18 review findings (fixed in `0f92e50`; use them as the re-review checklist):
 - Critical: the Markdown report rendered LLM claim, reason, patch.why and span_id unescaped. Required fixes: an `md_cell` sanitizer filter, URL-encoded ids, and a longer fence for `why`.
