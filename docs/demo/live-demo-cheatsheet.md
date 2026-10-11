@@ -9,7 +9,7 @@ Three AI agents get a task. A help page they read contains a planted instruction
 ## Before you hit record (10 minutes, off camera)
 
 1. Close every Claude Code window open in this project. Check Task Manager for `claude`.
-2. In a plain terminal: `neatlogs auth status`. If it is not logged in, `neatlogs auth login`.
+2. In a plain terminal, within 30 minutes of recording: `neatlogs auth login`, then `neatlogs auth status`. The expiry it prints must be later than now (it is in UTC; IST is UTC plus 5:30). In the Oct 11 rehearsal it said "Authenticated" with an expiry already past, and span feedback failed.
 3. `git status` shows nothing outside `runs/`.
 4. `uv run pytest -q` passes.
 5. Nothing on ports 8100 to 8104, no fleet run in the last 30 minutes.

@@ -511,6 +511,33 @@ def test_unreachable_confirm_status_gives_up_after_three_errors(tmp_path):
     assert final.status == "not_fixed" and final.extra["confirm"]["reason"] == "confirm_unreachable"
 
 
+class OutageConfirmer(FakeConfirmer):
+    def __init__(self, check_failures, clean_failures):
+        super().__init__(ready_after=0)
+        self.check_failures, self.clean_failures = check_failures, clean_failures
+
+    def check(self, case):
+        if self.check_failures:
+            self.check_failures -= 1
+            raise NeatlogsError(503, "unavailable")
+        return super().check(case)
+
+    def watchdog_clean(self, rerun_ids, role):
+        if self.clean_failures:
+            self.clean_failures -= 1
+            raise NeatlogsError(503, "unavailable")
+        return True
+
+
+def test_neatlogs_outage_during_confirmation_waits_instead_of_failing_the_case(tmp_path):
+    p, st, case, _, _ = to_confirming(tmp_path, OutageConfirmer(check_failures=8, clean_failures=8))
+    for _ in range(20):
+        p.run_case(st.get(case.case_id))
+    final = st.get(case.case_id)
+    assert final.status == "fixed"
+    assert any(e["kind"] == "confirm_deferred" for e in st.events(case.case_id))
+
+
 def test_patched_case_does_not_start_a_second_confirm_job(tmp_path):
     confirmer = FakeConfirmer(ready_after=99)
     p, st, case, _, _ = build(tmp_path, confirmer=confirmer, auto_patch=False)

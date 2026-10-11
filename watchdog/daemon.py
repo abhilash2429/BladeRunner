@@ -288,8 +288,12 @@ class Pipeline:
             self.state.log_event(case.case_id, "memory_failed", {"error": "not stored"})
 
     def _on_confirming(self, case) -> bool:
+        # A neatlogs outage says nothing about the fix; the confirmer's own deadline bounds the wait.
         try:
             status = self.confirmer.check(case)
+        except (NeatlogsError, httpx.HTTPError) as e:
+            self.state.log_event(case.case_id, "confirm_deferred", _err(e))
+            return False
         except Exception as e:
             self.state.log_event(case.case_id, "confirm_check_failed", _err(e))
             if self.state.bump_retry(case.case_id, "confirm") >= self.confirm_retries:
@@ -299,7 +303,11 @@ class Pipeline:
             return False
         if status.get("status") != "done":
             return self._not_fixed(case, f"confirm_{status.get('status')}")
-        watchdog_clean = self.confirmer.watchdog_clean(status["rerun_ids"], role_of(case.agent))
+        try:
+            watchdog_clean = self.confirmer.watchdog_clean(status["rerun_ids"], role_of(case.agent))
+        except (NeatlogsError, httpx.HTTPError) as e:
+            self.state.log_event(case.case_id, "confirm_deferred", _err(e))
+            return False
         clean = bool(status["rerun_clean"]) and bool(status["control_clean"]) and watchdog_clean
         self.state.set_extra(case.case_id, confirm={**status, "watchdog_clean": watchdog_clean})
         case = self.state.transition(case.case_id, "fixed" if clean else "not_fixed")
