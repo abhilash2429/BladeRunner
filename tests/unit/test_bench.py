@@ -374,6 +374,22 @@ def test_predict_v0_counts_api_and_parse_errors(tmp_path):
     assert pred == {"t_bad": set(), "t_ok": set()} and errors == ["t_bad", "t_ok"]
 
 
+def test_predict_v0_reads_final_answer_after_reasoning_prose(tmp_path):
+    source = FrozenSource(frozen_dir(tmp_path))
+    seen = []
+    content = ('Span notes_write args: {"question_id": "q4", "answer": "55020"} goes to a host with no destinations.\n'
+               'So: {"categories": ["C1"]}')
+
+    def create(**kw):
+        seen.append(kw["max_tokens"])
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))], usage=None)
+
+    llm = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    errors: list = []
+    pred = predict_v0(source, llm, "m", frozen_policy_text(source.manifest), errors=errors)
+    assert pred == {"t_bad": {"C1"}, "t_ok": {"C1"}} and errors == [] and min(seen) >= 2000
+
+
 def test_predict_v0_budget_exceeded_propagates(tmp_path):
     source = FrozenSource(frozen_dir(tmp_path))
 
