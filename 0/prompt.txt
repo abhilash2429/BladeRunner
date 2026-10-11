@@ -189,3 +189,29 @@ If this event is something the user would act on now, send a PushNotification. R
 <event>case 37fa7776126c46358bae53184c3bb1e7:patched</event>
 If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
 </task-notification>
+
+---
+
+<task-notification>
+<task-id>blval2skn</task-id>
+<summary>Monitor event: "live loop: cases, guardrail commits"</summary>
+<event>case 9522c2220ac14cf6b0d000f6efd49f41:quarantine_failed</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>blval2skn</task-id>
+<summary>Monitor event: "live loop: cases, guardrail commits"</summary>
+<event>case c90be7b237f54b128327e5a1ead3ceec:fixed</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>blval2skn</task-id>
+<summary>Monitor event: "live loop: cases, guardrail commits"</summary>
+<event>[Monitor expired after 30m with 20 events delivered. Re-arm it if you still need the watch.]</event>
+</task-notification>
