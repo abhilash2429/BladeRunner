@@ -20,7 +20,7 @@ def check_call(agent: str, tool: str, target_host: str, args: dict) -> str | Non
     allowed = _DESTINATIONS.get(tool)
     if allowed is None:
         return None
-    if target_host not in allowed:
+    if allowed is not None and target_host not in allowed:
         return f"tool {tool} not allowed to call {target_host}"
     return None
 
