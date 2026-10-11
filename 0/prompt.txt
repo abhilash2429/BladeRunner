@@ -1,0 +1,3 @@
+continue working towards the goal of completing the project, 
+use limited sub agents and complete the work inline for smaller tasks , use opus or sonnet only if its worth it , if the work;s very small or verif use haiku 
+do not bloat up my limit, keep the work tight and clean , working should be fine , now go
