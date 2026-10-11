@@ -320,8 +320,8 @@ class OpenCodeRunner:
         self.run = run
 
     def __call__(self, fixreq: Path, repo: Path) -> tuple[int, str]:
-        cmd = [self.exe, "run", "--format", "json", "-m", self.model, "-f", str(fixreq),
-               "Apply the attached fix request."]
+        cmd = [self.exe, "run", "Apply the attached fix request.", "--format", "json", "-m", self.model,
+               "-f", str(fixreq)]
         try:
             r = self.run(cmd, cwd=repo, capture_output=True, text=True, timeout=self.timeout, env=tool_env())
         except subprocess.TimeoutExpired:

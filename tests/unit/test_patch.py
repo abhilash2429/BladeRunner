@@ -369,8 +369,8 @@ def test_runner_passes_fix_request_file_and_model():
 
     code, out = OpenCodeRunner(exe="oc", run=run)(Path("runs/fixreq/c1.md"), Path("/repo"))
     assert code == 0 and out == "ok"
-    assert seen["cmd"] == ["oc", "run", "--format", "json", "-m", "amazon-bedrock/zai.glm-5", "-f",
-                           str(Path("runs/fixreq/c1.md")), "Apply the attached fix request."]
+    assert seen["cmd"] == ["oc", "run", "Apply the attached fix request.", "--format", "json", "-m",
+                           "amazon-bedrock/zai.glm-5", "-f", str(Path("runs/fixreq/c1.md"))]
     assert seen["kw"]["cwd"] == Path("/repo") and seen["kw"]["timeout"] == 600 and "PATH" in seen["kw"]["env"]
 
 
